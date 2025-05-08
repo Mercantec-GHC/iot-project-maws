@@ -1,0 +1,185 @@
+﻿@page "/feedback"
+@using DomainModels
+@using Blazor.Services
+@inject HttpClient HttpClient
+@inject AppState AppState
+
+<PageTitle>TamaTown Central Feedback</PageTitle>
+
+<h3>TamaTown Central Feedback</h3>
+
+@if (!submitFeedback)
+{
+    @if (!AppState.LoggedIn)
+    {
+        <p><br />You must be logged in to leave feedback. <a href="/login">Login here</a></p>
+    }
+    else
+    {
+        <p><br />Write your feedback</p>
+        <input type="text" @bind="newFeedback.FeedbackText" class="form-control mb-2" placeholder="Your Feedback" />
+        <button class="btn btn-dark" @onclick="SubmitFeedback">Submit</button>
+        <button class="btn btn-secondary ml-2" @onclick="CancelFeedback">Cancel</button>
+    }
+}
+
+@if (feedbacks == null)
+{
+    <p>Loading feedback...</p>
+}
+else
+{
+    @foreach (var feedback in feedbacks)
+    {
+        <div class="card mt-3">
+            <div class="card-body">
+                <p><strong>@GetUserName(feedback.UserId)</strong>: @feedback.FeedbackText</p>
+                @if (AppState.LoggedIn && AppState.IsAdmin)
+                {
+                    <button class="btn btn-danger" @onclick="() => DeleteFeedback(feedback.FeedBackId)">Delete</button>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<Feedback> feedbacks = new();
+    private Feedback newFeedback = new();
+    private bool submitFeedback = false;
+    private Dictionary<int, string> userNames = new();
+
+    // On page initialization, fetch the existing feedback
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFeedbacks();
+        await LoadUserNames();
+    }
+
+    // Loads all feedback from the API
+    private async Task LoadFeedbacks()
+    {
+        try
+        {
+            // Fetch feedbacks from the API (replace the endpoint with the correct one)
+            feedbacks = await HttpClient.GetFromJsonAsync<List<Feedback>>("api/Feedbacks") ?? new List<Feedback>();
+            feedbacks.Reverse();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading feedbacks: {ex.Message}");
+            // Optionally, display an error message to the user
+        }
+    }
+
+    // Loads all user names from the API
+    private async Task LoadUserNames()
+    {
+        try
+        {
+            var users = await HttpClient.GetFromJsonAsync<List<User>>("api/Users/all");
+            if (users != null)
+            {
+                userNames = users.ToDictionary(user => user.UserId, user => user.FullName);
+                Console.WriteLine("User names loaded successfully.");
+            }
+            else
+            {
+                Console.WriteLine("No users found.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user names: {ex.Message}");
+        }
+    }
+
+    // Show the feedback form
+    private void ShowFeedbackForm()
+    {
+        submitFeedback = true;
+        newFeedback = new Feedback();  // Reset the feedback form
+    }
+
+    // Submits the new feedback
+    private async Task SubmitFeedback()
+    {
+        if (!string.IsNullOrWhiteSpace(newFeedback.FeedbackText))
+        {
+      
+            try
+            {
+                newFeedback.UserId = AppState.UserId; // Get the logged-in user's ID
+
+                var response = await HttpClient.PostAsJsonAsync("api/Feedbacks", newFeedback);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    // Feedback submitted successfully
+                    feedbacks.Add(newFeedback);
+                    submitFeedback = false;
+                    newFeedback = new Feedback(); // Clear the form
+                }
+                else
+                {
+                    Console.WriteLine("Failed to submit feedback.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error submitting feedback: {ex.Message}");
+            }
+        }
+        else
+        {
+            // Handle the case where the feedback is empty
+            Console.WriteLine("Feedback text is empty.");
+        }
+    }
+
+    // Method to get the full name based on UserId
+    private string GetUserName(int userId)
+    {
+        if (userNames.ContainsKey(userId))
+        {
+            return userNames[userId];
+        }
+        else
+        {
+            Console.WriteLine($"User ID {userId} not found in userNames dictionary.");
+            return "Unknown User";
+        }
+    }
+
+    // Cancels the feedback submission
+    private void CancelFeedback()
+    {
+        submitFeedback = false;
+        newFeedback = new Feedback(); // Reset the feedback form
+    }
+
+    // Deletes a feedback
+    private async Task DeleteFeedback(int feedbackId)
+    {
+        try
+        {
+            var response = await HttpClient.DeleteAsync($"api/Feedbacks/{feedbackId}");
+            if (response.IsSuccessStatusCode)
+            {
+                var feedbackToRemove = feedbacks.FirstOrDefault(f => f.FeedBackId == feedbackId);
+                if (feedbackToRemove != null)
+                {
+                    feedbacks.Remove(feedbackToRemove);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Failed to delete feedback.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting feedback: {ex.Message}");
+        }
+    }
+}
