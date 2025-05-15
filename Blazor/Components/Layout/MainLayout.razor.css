@@ -1,0 +1,136 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.content-wrapper {
+    display: flex;
+    flex: 1;
+    margin-top: 3.5rem; /* Adjust for the fixed top-row height */
+}
+
+main {
+    flex: 1;
+    overflow: auto;
+}
+
+.sidebar {
+    display: none;
+    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+}
+
+.top-row {
+    background-color: #ffcc00 !important; /* Bright yellow for a playful Tamagotchi vibe */
+    border-bottom: 1px solid #ff9900; /* Slightly darker yellow for contrast */
+    justify-content: space-between;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1000; /* Ensure it stays above other elements */
+    padding: 0 1rem;
+}
+
+.hotel-name {
+    font-weight: bold;
+    font-size: 1.8rem; /* Increase font size for prominence */
+    color: #ff6600; /* Bright orange to match the Tamagotchi theme */
+    font-family: 'Comic Sans MS', cursive, sans-serif; /* Fun font for Tamagotchi style */
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Add a subtle shadow for better visibility */
+    margin-left: 0.5rem; /* Add some spacing from the left edge */
+}
+
+
+.top-nav a {
+    white-space: nowrap;
+    margin-left: 1.5rem;
+    text-decoration: none;
+    color: #333333; /* Darker text for readability */
+    font-weight: bold;
+    font-family: 'Comic Sans MS', cursive, sans-serif; /* Fun font for Tamagotchi style */
+}
+
+    .top-nav a:hover {
+        text-decoration: underline;
+        color: #ff6600; /* Bright orange for hover effect */
+    }
+
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropbtn {
+    background-color: #343a40;
+    color: white;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    right: 0; /* Ensure the dropdown aligns to the right */
+}
+
+    .dropdown-content a {
+        color: black;
+        padding: 12px 16px;
+        text-decoration: none;
+        display: block;
+    }
+
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown:hover .dropbtn {
+    background-color: #3e8e41;
+}
+
+@media (min-width: 641px) {
+    .sidebar {
+        width: 250px;
+        height: 100vh;
+        position: sticky;
+        top: 0;
+    }
+
+    .top-row, article {
+        padding-left: 2rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }

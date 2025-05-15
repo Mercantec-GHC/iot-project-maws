@@ -1,0 +1,88 @@
+﻿@inject AppState AppState
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="top-row px-4">
+        <span class="hotel-name">TamaTown Central</span>
+        <nav class="top-nav">
+            <a href="/">Home</a>
+            @if (!AppState.LoggedIn)
+            {
+                <a href="login">Login</a>
+                <a href="create-profile">Create Profile</a>
+            }
+            else
+            {
+                <a href="javascript:void(0)" @onclick="Logout">Logout</a>
+                <a href="profilepage">Profile Page</a>
+            }
+            <a href="contact">Contact</a>
+            <a href="feedback">Feedback</a>
+            @if (AppState.LoggedIn && AppState.IsAdmin)
+            {
+                <div class="dropdown">
+                    <button class="dropbtn">Admin Pages</button>
+                    <div class="dropdown-content">
+                        <a href="admin-profile-list">Manage Profiles</a>
+                    </div>
+                </div>
+            }
+        </nav>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+
+        <main>
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
+    </div>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        NavigationManager.LocationChanged += HandleLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await AppState.InitializeStateAsync(JSRuntime);
+        }
+    }
+
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await AppState.InitializeStateAsync(JSRuntime);
+    }
+
+    private async Task Logout()
+    {
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+        AppState.LoggedIn = false;
+        NavigationManager.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
+    }
+}
+
+
+
+
