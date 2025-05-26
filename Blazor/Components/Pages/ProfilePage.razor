@@ -5,7 +5,6 @@
 @using System.Globalization
 @inject HttpClient HttpClient
 @inject NavigationManager NavigationManager
-@inject AppState AppState
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 
@@ -14,8 +13,37 @@
 <button class="btn btn-danger" @onclick="DeleteUserProfile">Slet Profil</button>
 <a href="/EditProfile/@AppState.UserId" class="btn btn-primary">Rediger Profil</a>
 
-
-
+<!-- Pet Status Graphs Section -->
+<div class="pet-stats-container">
+    <h4>Pet Status History</h4>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="chart-container">
+                <canvas id="petStatsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="stat-card">
+                <h5>Hunger</h5>
+                <canvas id="hungerChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <h5>Happiness</h5>
+                <canvas id="happinessChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <h5>Tiredness</h5>
+                <canvas id="tirednessChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Display any error or status messages -->
 @if (!string.IsNullOrEmpty(message))
@@ -36,6 +64,9 @@
 
     // User object to represent the logged-in user
     private User user = new User();
+    
+    // Pet data history for charts
+    private List<PetData> petDataHistory = new List<PetData>();
 
     // Called when the page initializes
     protected override async Task OnInitializedAsync()
@@ -44,10 +75,18 @@
         if (!AppState.LoggedIn) return;
         UserId = AppState.UserId;
         await FetchUserDetails();
-
+        await FetchPetDataHistory();
     }
 
-    // Method to fetch user details (replace with your own logic to fetch user)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && petDataHistory.Count > 0)
+        {
+            await RenderChartsAsync();
+        }
+    }
+
+    // Method to fetch user details
     async Task FetchUserDetails()
     {
         try
@@ -65,6 +104,54 @@
             message = $"An error occurred while fetching user details: {ex.Message}";
         }
     }
+
+    // Method to fetch pet data history
+    async Task FetchPetDataHistory()
+    {
+        try
+        {
+            petDataHistory = await HttpClient.GetFromJsonAsync<List<PetData>>("api/PetData");
+            
+            // Sort by timestamp to ensure chronological order
+            petDataHistory = petDataHistory.OrderBy(p => p.Timestamp).ToList();
+            
+            // Limit to last 50 data points if there are too many
+            if (petDataHistory.Count > 50)
+            {
+                petDataHistory = petDataHistory.Skip(petDataHistory.Count - 50).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Error loading pet data history: {ex.Message}";
+        }
+    }
+
+    // Render charts using JavaScript interop with Chart.js
+    async Task RenderChartsAsync()
+    {
+        if (petDataHistory.Count == 0) return;
+
+        // Prepare data for charts
+        var labels = petDataHistory.Select(p => p.Timestamp.ToString("MM/dd HH:mm")).ToArray();
+        var hungerData = petDataHistory.Select(p => p.Hunger).ToArray();
+        var happinessData = petDataHistory.Select(p => p.Happiness).ToArray();
+        var tirednessData = petDataHistory.Select(p => p.Tiredness).ToArray();
+
+        // Create combined chart
+        await JSRuntime.InvokeVoidAsync("createCombinedChart", 
+            "petStatsChart", 
+            labels, 
+            hungerData, 
+            happinessData, 
+            tirednessData);
+
+        // Create individual charts
+        await JSRuntime.InvokeVoidAsync("createSingleStatChart", "hungerChart", labels, hungerData, "rgb(255, 99, 132)");
+        await JSRuntime.InvokeVoidAsync("createSingleStatChart", "happinessChart", labels, happinessData, "rgb(75, 192, 192)");
+        await JSRuntime.InvokeVoidAsync("createSingleStatChart", "tirednessChart", labels, tirednessData, "rgb(255, 159, 64)");
+    }
+
     private async Task DeleteUserProfile()
     {
         // Bekræftelse dialog
@@ -72,7 +159,6 @@
         {
             try
             {
-
                 var userId = AppState.UserId;
 
                 // Send en DELETE request til API'en
@@ -80,10 +166,7 @@
 
                 if (response.IsSuccessStatusCode)
                 {
-
                     await JSRuntime.InvokeVoidAsync("localStorage.clear");
-
-
                     NavigationManager.NavigateTo("/login");
                 }
                 else
@@ -98,11 +181,8 @@
                 message = "Der opstod en fejl. Kontakt venligst administrator.";
             }
         }
-        
     }
-
 }
-
 
 <style>
     .profile-container {
@@ -156,5 +236,35 @@
         font-size: 16px;
         margin: 4px 2px;
         border-radius: 8px;
+    }
+
+    /* Pet Stats Chart Styles */
+    .pet-stats-container {
+        margin-top: 30px;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        height: 250px;
+    }
+
+    .stat-card h5 {
+        text-align: center;
+        margin-bottom: 15px;
+        color: #333;
     }
 </style>

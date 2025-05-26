@@ -1,8 +1,10 @@
 **/appsettings.json
 **/appsettings.Development.json
+**/ArduinoKode/arduino_secrets.h
 bin/
 obj/
 .vs/
 
 /API/appsettings.json
 /Blazor/appsettings.json
+/ArduinoKode/arduino_secrets.h
