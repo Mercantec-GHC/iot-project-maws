@@ -5,6 +5,8 @@
 #include <WiFiNINA.h>
 #include <ArduinoHttpClient.h>
 #include "arduino_secrets.h"
+#include <Adafruit_SleepyDog.h> // Add watchdog timer
+#include <ArduinoJson.h>        
 
 // WiFi Configuration
 char ssid[] = SECRET_SSID;
@@ -18,15 +20,28 @@ HttpClient http_client(wifi_client, server_address, server_port);
 animation_t *smile;
 pet_t *pet;
 
+// Add debounce timing variables
+unsigned long last_button_time = 0;
+const unsigned long debounce_delay = 200; // 200ms debounce
+
+// Debugging variables
+unsigned long debug_timestamp = 0;
+const unsigned long DEBUG_INTERVAL = 5000; // Print debug info every 5 seconds
+
+// Variables for sending data to server
+unsigned long last_send_time = 0;
+const unsigned long SEND_DATA_INTERVAL = 5 * 60 * 1000; // Send data every 5 minutes
+
 void setup()
 {
   Serial.begin(9600);
-  while (!Serial)
-    ; // Wait for serial to connect
 
   // MKR Carrier Init
   while (!carrier.begin())
-    ;
+  {
+    Watchdog.reset(); // Reset watchdog during long operations
+  }
+
   carrier.display.setRotation(2);
   carrier.display.fillScreen(0x0000);
 
@@ -45,6 +60,13 @@ void setup()
 
   // WiFi Init
   connectToWiFi();
+
+  // Configure power settings
+  USBDevice.detach();
+  delay(100);
+  USBDevice.attach();
+
+  Watchdog.reset(); // Reset watchdog after setup completes
 }
 
 void connectToWiFi()
@@ -84,6 +106,8 @@ void connectToWiFi()
 
 void sendPetDataToServer(pet_t *pet)
 {
+  Serial.println("Attempting to send data to server...");
+
   // Check WiFi connection first
   if (WiFi.status() != WL_CONNECTED)
   {
@@ -91,31 +115,57 @@ void sendPetDataToServer(pet_t *pet)
     connectToWiFi();
     if (WiFi.status() != WL_CONNECTED)
     {
+      Serial.println("Reconnection failed, aborting data send.");
       return; // Exit if reconnection failed
     }
+    Serial.println("WiFi reconnected.");
   }
 
-  String post_data = "{";
-  post_data += "\"hunger\":" + String(pet->hunger) + ",";
-  post_data += "\"happiness\":" + String(pet->happiness) + ",";
-  post_data += "\"tiredness\":" + String(pet->tiredness) + ",";
-  // Add lifespan percentage (0-100)
-  int lifespan_percent = (int)((float)pet->lifespan / MAX_LIFESPAN * 100);
-  post_data += "\"lifespan\":" + String(lifespan_percent);
-  post_data += "}";
+  // Reset watchdog before creating the JSON
+  Watchdog.reset();
+  Serial.println("Creating JSON payload...");
 
-  Serial.println("Sending data to server...");
+  StaticJsonDocument<200> jsonDoc; 
+  jsonDoc["hunger"] = pet->hunger;
+  jsonDoc["happiness"] = pet->happiness;
+  jsonDoc["tiredness"] = pet->tiredness;
+  int lifespan_percent = (int)((float)pet->lifespan / MAX_LIFESPAN * 100);
+  jsonDoc["lifespan"] = lifespan_percent;
+
+  String post_data;
+  serializeJson(jsonDoc, post_data);
+
+  Serial.print("JSON payload: ");
   Serial.println(post_data);
 
-  http_client.beginRequest();
-  http_client.post("/api/PetData");
-  http_client.sendHeader("Content-Type", "application/json");
-  http_client.sendHeader("Content-Length", post_data.length());
-  http_client.beginBody();
-  http_client.print(post_data);
-  http_client.endRequest();
+  // Reset watchdog before HTTP operations
+  Watchdog.reset();
+  Serial.println("Preparing HTTP request...");
 
-  // Process response
+  // Stop any previous connection and set a timeout
+  http_client.stop();
+  http_client.setTimeout(10000); // 10 second timeout
+
+  Serial.println("Calling http_client.beginRequest()...");
+  http_client.beginRequest();
+  Serial.println("Calling http_client.post()...");
+  http_client.post("/api/PetData"); 
+  Serial.println("Calling http_client.sendHeader() for Content-Type...");
+  http_client.sendHeader("Content-Type", "application/json");
+  Serial.println("Calling http_client.sendHeader() for Content-Length...");
+  http_client.sendHeader("Content-Length", post_data.length());
+  Serial.println("Calling http_client.beginBody()...");
+  http_client.beginBody();
+  Serial.println("Calling http_client.print() with payload...");
+  http_client.print(post_data);
+  Serial.println("Calling http_client.endRequest()...");
+  http_client.endRequest();
+  Serial.println("HTTP request sent.");
+
+  // Reset watchdog after request
+  Watchdog.reset();
+
+  Serial.println("Processing HTTP response...");
   int status_code = http_client.responseStatusCode();
   String response_body = http_client.responseBody();
 
@@ -123,119 +173,9 @@ void sendPetDataToServer(pet_t *pet)
   Serial.println(status_code);
   Serial.print("Response: ");
   Serial.println(response_body);
+  Serial.println("Data sending process complete.");
 
-  if (status_code <= 0)
-  {
-    Serial.println("Error connecting to server. Check server address and port.");
-  }
-  else if (status_code >= 200 && status_code < 300)
-  {
-    Serial.println("Data sent successfully!");
-  }
-  else
-  {
-    Serial.println("Server error. Check API endpoint and data format.");
-  }
-}
-
-// Implementation of pet_init (if not already in pet.h)
-pet_t *pet_init(int initial_hunger, int initial_happiness, int initial_tiredness)
-{
-  pet_t *new_pet = (pet_t *)malloc(sizeof(pet_t));
-  new_pet->hunger = initial_hunger;
-  new_pet->happiness = initial_happiness;
-  new_pet->tiredness = initial_tiredness;
-  new_pet->birth_time = millis();
-  new_pet->lifespan = MAX_LIFESPAN;
-  new_pet->is_alive = true;
-  return new_pet;
-}
-
-void pet_update_lifespan(pet_t *pet)
-{
-  static unsigned long last_lifespan_update = 0;
-  unsigned long current_time = millis();
-
-  // Update lifespan every LIFESPAN_DECREMENT_INTERVAL
-  if (current_time - last_lifespan_update > LIFESPAN_DECREMENT_INTERVAL)
-  {
-    // Calculate health score (0-100) based on pet stats
-    int health_score = (pet->hunger + pet->happiness + (100 - pet->tiredness)) / 3;
-
-    // Calculate lifespan decrement based on health
-    // Lower health = faster lifespan decrease
-    unsigned long decrement = 0;
-
-    if (health_score < 20)
-    {
-      decrement = LIFESPAN_DECREMENT_INTERVAL * 5; // Very unhealthy - 5x faster aging
-    }
-    else if (health_score < 40)
-    {
-      decrement = LIFESPAN_DECREMENT_INTERVAL * 2; // Unhealthy - 2x faster aging
-    }
-    else if (health_score < 60)
-    {
-      decrement = LIFESPAN_DECREMENT_INTERVAL; // Normal aging
-    }
-    else if (health_score < 80)
-    {
-      decrement = LIFESPAN_DECREMENT_INTERVAL / 2; // Healthy - slower aging
-    }
-    else
-    {
-      decrement = LIFESPAN_DECREMENT_INTERVAL / 4; // Very healthy - very slow aging
-    }
-
-    // Ensure we don't underflow
-    if (pet->lifespan > decrement)
-    {
-      pet->lifespan -= decrement;
-    }
-    else
-    {
-      pet->lifespan = 0;
-      pet->is_alive = false;
-    }
-
-    last_lifespan_update = current_time;
-  }
-}
-
-bool pet_is_alive(pet_t *pet)
-{
-  return pet->is_alive && pet->lifespan > 0;
-}
-
-void pet_draw_death(pet_t *pet)
-{
-  // Clear the screen
-  carrier.display.fillScreen(0x0000);
-
-  // Draw death message
-  carrier.display.setTextColor(ST77XX_WHITE);
-  carrier.display.setTextSize(2);
-  carrier.display.setCursor(20, center_y - 40);
-  carrier.display.println("Your pet has");
-  carrier.display.setCursor(20, center_y - 10);
-  carrier.display.println("passed away");
-
-  // Calculate how long the pet lived
-  unsigned long life_duration = millis() - pet->birth_time;
-  int days_lived = life_duration / (24 * 60 * 60 * 1000);
-  int hours_lived = (life_duration % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000);
-
-  carrier.display.setCursor(20, center_y + 20);
-  carrier.display.print("Lived: ");
-  carrier.display.print(days_lived);
-  carrier.display.print("d ");
-  carrier.display.print(hours_lived);
-  carrier.display.println("h");
-
-  carrier.display.setCursor(20, center_y + 50);
-  carrier.display.println("Press button to");
-  carrier.display.setCursor(20, center_y + 70);
-  carrier.display.println("restart");
+  Watchdog.reset();
 }
 
 void pet_draw_age(pet_t *pet)
@@ -265,8 +205,6 @@ void pet_draw_age(pet_t *pet)
   carrier.display.print(minutes);
   carrier.display.print("m");
 }
-
-// Add this function before the loop() function
 
 void update_status_leds(pet_t *pet)
 {
@@ -350,36 +288,95 @@ void update_status_leds(pet_t *pet)
   carrier.leds.show();
 }
 
-// Modify your loop() function to handle pet death
+
+void pet_handle_events_modified(pet_t *pet)
+{
+  // Only process button events if enough time has passed since last event
+  unsigned long current_time = millis();
+  if (current_time - last_button_time < debounce_delay)
+  {
+    return; // Skip button processing if not enough time has passed
+  }
+
+  // Knap 0: Mad
+  if (carrier.Button0.getTouch())
+  {
+    Serial.println("Knap 0 trykket (Mad)");
+    pet->hunger = constrain(pet->hunger - 20, MIN_STAT, MAX_STAT);      // Reducer sult
+    pet->tiredness = constrain(pet->tiredness + 1, MIN_STAT, MAX_STAT); // Lidt træt af at spise
+    pet->feedback_message = "Mums!";
+    pet->feedback_timeout = millis() + FEEDBACK_DURATION;
+    pet->status_change = true;
+    last_button_time = current_time;
+  }
+
+  // Knap 1: Leg
+  else if (carrier.Button1.getTouch())
+  {
+    Serial.println("Knap 1 trykket (Leg)");
+    pet->happiness = constrain(pet->happiness + 4, MIN_STAT, MAX_STAT);
+    pet->hunger = constrain(pet->hunger + 5, MIN_STAT, MAX_STAT);
+    pet->tiredness = constrain(pet->tiredness + 3, MIN_STAT, MAX_STAT);
+    pet->feedback_message = "Sjovt!";
+    pet->feedback_timeout = millis() + FEEDBACK_DURATION;
+    pet->status_change = true;
+    last_button_time = current_time;
+  }
+
+  // Knap 3: Lur
+  else if (carrier.Button3.getTouch())
+  {
+    Serial.println("Knap 3 trykket (Lur)");
+    pet->tiredness = constrain(pet->tiredness - 10, MIN_STAT, MAX_STAT);
+    pet->feedback_message = "Zzz";
+    pet->feedback_timeout = millis() + FEEDBACK_DURATION;
+    pet->status_change = true;
+    last_button_time = current_time;
+  }
+}
+
 void loop()
 {
+  // Debug timing
+  unsigned long current_millis = millis();
+  if (current_millis - debug_timestamp > DEBUG_INTERVAL)
+  {
+    debug_timestamp = current_millis;
+    Serial.print("System uptime (seconds): ");
+    Serial.println(current_millis / 1000);
+    Serial.print("Free memory: ");
+    Serial.println(freeMemory());
+  }
+
+  // Update buttons at the beginning of the loop
+  carrier.Buttons.update();
+
+  // Always update the animation
+  animation_step(smile);
+
   // Check if pet is alive
   if (pet_is_alive(pet))
   {
-    // Regular pet activities
-    animation_step(smile);
+    // Draw animation frame
     animation_draw_frame(center_x - 32, center_y - 32, 64, smile);
-    pet_handle_events(pet);
+
+    // Handle button presses
+    pet_handle_events_modified(pet);
+
+    // Update UI
     pet_draw_feedback(pet);
     pet_draw_status(pet);
-
-    // Display pet age
     pet_draw_age(pet);
-
-    // Update RGB LEDs to show pet status
     update_status_leds(pet);
 
     // Update pet lifespan
     pet_update_lifespan(pet);
 
-    static unsigned long last_sent = 0;
-    unsigned long current_time = millis();
-
-    // Send data every 30 seconds
-    if (current_time - last_sent > 30000)
+    // Send data to server periodically
+    if (current_millis - last_send_time > SEND_DATA_INTERVAL)
     {
       sendPetDataToServer(pet);
-      last_sent = current_time;
+      last_send_time = current_millis;
     }
   }
   else
@@ -395,19 +392,30 @@ void loop()
     }
     carrier.leds.show();
 
-    // Check if a button is pressed to restart
-    carrier.loop();
-    if (carrier.Button1.getTouch() || carrier.Button2.getTouch() ||
-        carrier.Button3.getTouch() || carrier.Button4.getTouch() ||
-        carrier.Button5.getTouch())
+    // Check for restart button press
+    unsigned long current_time = millis();
+    if (current_time - last_button_time > debounce_delay)
     {
-      // Reset pet
-      free(pet);
-      pet = pet_init(50, 50, 50);
-      carrier.display.fillScreen(0x0000);
+      if (carrier.Button0.getTouch() || carrier.Button1.getTouch() ||
+          carrier.Button2.getTouch() || carrier.Button3.getTouch() ||
+          carrier.Button4.getTouch())
+      {
+        // Reset pet
+        free(pet);
+        pet = pet_init(50, 50, 50);
+        carrier.display.fillScreen(0x0000);
+        last_button_time = current_time;
+      }
     }
   }
 
-  // Check buttons and sensor inputs from carrier
-  carrier.loop();
+  // Short delay to prevent CPU overload
+  delay(10);
+}
+
+// track free memory
+int freeMemory()
+{
+  char top;
+  return &top - reinterpret_cast<char *>(malloc(4));
 }
