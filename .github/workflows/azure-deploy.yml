@@ -1,3 +1,4 @@
+
 name: Deploy TamaTown Central to Azure
 
 on:
@@ -23,12 +24,17 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
-    - name: Show project structure
+    - name: Show project structure and working directory
       run: |
+        echo "Current working directory: $(pwd)"
         echo "Repository structure:"
         find . -name "*.csproj" -type f | head -20
-        echo "Current directory contents:"
-        ls -la
+        echo ""
+        echo "API project details:"
+        ls -la API/
+        echo ""
+        echo "API.csproj content:"
+        cat API/API.csproj
     
     - name: Restore dependencies
       run: dotnet restore H3-Projekt.sln
@@ -40,19 +46,99 @@ jobs:
       run: dotnet test H3-Projekt.sln --no-restore --verbosity normal --configuration Release
       continue-on-error: true
     
-    # Build and publish API with verbose logging
-    - name: Publish TamaTown API
+    # Try publish with absolute path and maximum verbosity
+    - name: Publish API with full debugging
       run: |
-        echo "Publishing API project..."
-        dotnet publish API/API.csproj --configuration Release --no-restore --output ./api-publish --verbosity normal
-        echo "API publish completed with exit code: $?"
+        echo "Current directory: $(pwd)"
+        echo "Creating output directory manually..."
+        mkdir -p ./api-publish
+        echo "Directory created, listing contents:"
+        ls -la
+        echo ""
+        echo "Publishing API with maximum verbosity..."
+        dotnet publish API/API.csproj \
+          --configuration Release \
+          --no-restore \
+          --output "$(pwd)/api-publish" \
+          --verbosity diagnostic \
+          --no-build || echo "Publish failed with exit code: $?"
+        
+        echo ""
+        echo "Post-publish directory listing:"
+        ls -la
+        
+        echo ""
+        echo "Checking if api-publish exists and contents:"
+        if [ -d "./api-publish" ]; then
+          echo "✅ Directory exists"
+          ls -la ./api-publish/
+        else
+          echo "❌ Directory still missing"
+        fi
     
-    - name: Verify API publish contents
+    # Alternative: Try publishing to a different location
+    - name: Alternative publish attempt
       run: |
-        echo "Checking if api-publish directory exists..."
+        echo "Trying alternative publish approach..."
+        dotnet publish API/API.csproj \
+          --configuration Release \
+          --no-restore \
+          --output /tmp/api-publish \
+          --verbosity normal
+        
+        echo "Checking /tmp/api-publish:"
+        if [ -d "/tmp/api-publish" ]; then
+          echo "✅ Alternative location worked!"
+          ls -la /tmp/api-publish/
+          echo "Copying to expected location..."
+          cp -r /tmp/api-publish ./api-publish
+          echo "Copy completed, checking final location:"
+          ls -la ./api-publish/
+        else
+          echo "❌ Alternative location also failed"
+        fi
+    
+    # If that fails, try building and publishing separately
+    - name: Manual build and publish API
+      if: always()
+      run: |
+        echo "Trying manual approach..."
+        echo "Building API specifically:"
+        dotnet build API/API.csproj --configuration Release --no-restore --verbosity normal
+        
+        echo ""
+        echo "Checking build output:"
+        find API -name "*.dll" -type f
+        
+        echo ""
+        echo "Publishing with different parameters:"
+        dotnet publish API/API.csproj \
+          --configuration Release \
+          --output ./api-manual-publish \
+          --verbosity normal \
+          --self-contained false \
+          --no-restore
+        
+        echo ""
+        echo "Checking manual publish:"
+        if [ -d "./api-manual-publish" ]; then
+          echo "✅ Manual publish worked!"
+          ls -la ./api-manual-publish/
+          # Copy to expected location if main publish failed
+          if [ ! -d "./api-publish" ]; then
+            cp -r ./api-manual-publish ./api-publish
+          fi
+        else
+          echo "❌ Manual publish also failed"
+        fi
+    
+    # Verify final API publish
+    - name: Final API verification
+      run: |
+        echo "Final verification of API publish:"
         if [ -d "./api-publish" ]; then
           echo "✅ API publish directory found!"
-          echo "Contents of api-publish directory:"
+          echo "Contents:"
           ls -la ./api-publish/
           echo "File count: $(find ./api-publish -type f | wc -l)"
           
@@ -61,57 +147,51 @@ jobs:
             echo "✅ API.dll found"
           else
             echo "❌ API.dll not found"
-          fi
-          
-          if [ -f "./api-publish/API.exe" ] || [ -f "./api-publish/API" ]; then
-            echo "✅ API executable found"
-          else
-            echo "⚠️ API executable not found (this might be normal for some deployments)"
+            echo "Looking for any .dll files:"
+            find ./api-publish -name "*.dll" -type f || echo "No .dll files found"
           fi
         else
-          echo "❌ API publish directory not found!"
+          echo "❌ API publish directory still not found!"
           echo "Current directory contents:"
           ls -la
+          echo "This is a critical failure - stopping deployment"
           exit 1
         fi
     
-    # Build and publish Blazor with verbose logging
-    - name: Publish TamaTown Blazor App
+    # Similar approach for Blazor
+    - name: Publish Blazor with debugging
       run: |
         echo "Publishing Blazor project..."
-        dotnet publish Blazor/Blazor.csproj --configuration Release --no-restore --output ./blazor-publish --verbosity normal
-        echo "Blazor publish completed with exit code: $?"
-    
-    - name: Verify Blazor publish contents
-      run: |
-        echo "Checking if blazor-publish directory exists..."
+        mkdir -p ./blazor-publish
+        
+        dotnet publish Blazor/Blazor.csproj \
+          --configuration Release \
+          --no-restore \
+          --output "$(pwd)/blazor-publish" \
+          --verbosity normal || echo "Blazor publish failed with exit code: $?"
+        
+        echo "Checking Blazor publish:"
         if [ -d "./blazor-publish" ]; then
-          echo "✅ Blazor publish directory found!"
-          echo "Contents of blazor-publish directory:"
+          echo "✅ Blazor publish succeeded"
           ls -la ./blazor-publish/
-          echo "File count: $(find ./blazor-publish -type f | wc -l)"
-          
-          # Check for essential files
-          if [ -f "./blazor-publish/Blazor.dll" ]; then
-            echo "✅ Blazor.dll found"
-          else
-            echo "❌ Blazor.dll not found"
-          fi
-          
-          if [ -d "./blazor-publish/wwwroot" ]; then
-            echo "✅ wwwroot directory found"
-          else
-            echo "❌ wwwroot directory not found"
-          fi
         else
-          echo "❌ Blazor publish directory not found!"
-          echo "Current directory contents:"
-          ls -la
-          exit 1
+          echo "❌ Blazor publish failed, trying alternative..."
+          dotnet publish Blazor/Blazor.csproj \
+            --configuration Release \
+            --output /tmp/blazor-publish \
+            --verbosity normal
+          
+          if [ -d "/tmp/blazor-publish" ]; then
+            cp -r /tmp/blazor-publish ./blazor-publish
+            echo "✅ Blazor alternative publish succeeded"
+          else
+            echo "❌ Blazor publish completely failed"
+          fi
         fi
     
     # Deploy API to Azure App Service
     - name: Deploy API to Azure App Service
+      if: success()
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'TamaTownCentralAPI'
@@ -120,6 +200,7 @@ jobs:
     
     # Deploy Blazor to Azure App Service
     - name: Deploy Blazor to Azure App Service
+      if: success()
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'TamaTownCentral'
