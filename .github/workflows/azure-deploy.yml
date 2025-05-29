@@ -38,7 +38,7 @@ jobs:
       run: dotnet test "${{ env.SOLUTION_FILE_PATH }}" --no-build --verbosity normal --configuration Release
       continue-on-error: true # Or set to false if tests must pass
 
-    - name: Publish API Project
+- name: Publish API Project
       run: |
         echo "Current working directory: $(pwd)"
         echo "Attempting to create API publish directory manually: ${{ env.API_PUBLISH_OUTPUT_PATH }}"
@@ -49,9 +49,10 @@ jobs:
         ls -la "${{ env.API_PUBLISH_OUTPUT_PATH }}" || echo "API publish directory does not exist yet or ls failed."
         
         echo "Publishing API project: ${{ env.API_PROJECT_PATH }} with detailed verbosity"
+        # Ensure comments are on their own lines and not interfering with backslashes
+        # Removed --no-restore to let publish handle it if needed
         dotnet publish "${{ env.API_PROJECT_PATH }}" \
           --configuration Release \
-          # Removed --no-restore to let publish handle it if needed
           --output "${{ env.API_PUBLISH_OUTPUT_PATH }}" \
           --verbosity detailed # Increased verbosity
 
@@ -68,10 +69,9 @@ jobs:
           # Consider adding 'exit 1' here if API.dll is absolutely mandatory for the next steps
           # exit 1
         fi
-      env: # Ensuring environment variables are explicitly available to this step if defined globally
+      env:
         API_PROJECT_PATH: ${{ env.API_PROJECT_PATH }}
         API_PUBLISH_OUTPUT_PATH: ${{ env.API_PUBLISH_OUTPUT_PATH }}
-
     # --- Simplified Blazor Publish ---
     - name: Publish Blazor Project
       run: |
