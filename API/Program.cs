@@ -38,22 +38,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         }
     });
 
-// Add CORS configuration - allow both HTTP and HTTPS
+// Add CORS configuration - allow both development and production origins
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAllOrigins", builder =>
+    options.AddPolicy("AllowAllOrigins", corsBuilder =>
     {
-        builder.WithOrigins(
-                "https://localhost:7091",
-                "http://localhost:5021",
-                "https://localhost:7207",
-                "http://192.168.1.16:5021",
-                "https://192.168.1.16:7207",
-                "http://localhost:5143" // Add your Blazor HTTP endpoint
-            )
+        var allowedOrigins = new List<string>
+        {
+            // Development origins
+            "https://localhost:7091",
+            "http://localhost:5021",
+            "https://localhost:7207",
+            "http://192.168.1.16:5021",
+            "https://192.168.1.16:7207",
+            "http://localhost:5143"
+        };
+
+        // Add production origins from environment variables or configuration
+        var productionBlazorUrl = builder.Configuration["AllowedOrigins:BlazorApp"];
+        if (!string.IsNullOrEmpty(productionBlazorUrl))
+        {
+            allowedOrigins.Add(productionBlazorUrl);
+        }
+
+        corsBuilder.WithOrigins(allowedOrigins.ToArray())
             .AllowAnyMethod()
             .AllowAnyHeader()
-            .AllowCredentials(); // Important for JWT cookies
+            .AllowCredentials();
     });
 });
 

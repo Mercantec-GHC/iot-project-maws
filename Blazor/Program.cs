@@ -42,14 +42,14 @@ public class Program
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
-        // Configure HttpClient to work with both HTTP and HTTPS
+        // Configure HttpClient to use ApiBaseUrl from configuration
         builder.Services.AddHttpClient("API", client =>
         {
-            // Use HTTPS when available, fallback to HTTP in development
-            var baseUrl = builder.Environment.IsDevelopment() 
-                ? "http://localhost:5021/" 
-                : "https://localhost:7207/";
-            client.BaseAddress = new Uri(baseUrl);
+            var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? 
+                     (builder.Environment.IsDevelopment() 
+                         ? "http://localhost:5021/" 
+                         : "https://tama-town-central-api.onrender.com/");
+            client.BaseAddress = new Uri(apiBaseUrl);
         });
 
         builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
