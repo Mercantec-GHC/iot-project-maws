@@ -47,8 +47,9 @@ jobs:
     - name: Publish TamaTown API
       run: |
         echo "Publishing API project to ${{ github.workspace }}/api_output_package"
-        dotnet publish API/API.csproj --configuration Release --output ${{ github.workspace }}/api_output_package --verbosity normal
+        dotnet publish API/API.csproj --configuration Release --no-build --output ${{ github.workspace }}/api_output_package --verbosity normal
         echo "Publish command completed with exit code: $?"
+
     
     # Verify API publish output location
     - name: Verify API publish output
