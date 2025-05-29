@@ -15,16 +15,13 @@ RUN dotnet restore "API/API.csproj"
 COPY . .
 WORKDIR "/src/API"
 
-# Build the application
+# Build and publish in the same stage
 RUN dotnet build "API.csproj" -c $BUILD_CONFIGURATION -o /app/build
-
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "API.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 
 # Set environment variables for production
 ENV ASPNETCORE_ENVIRONMENT=Production
