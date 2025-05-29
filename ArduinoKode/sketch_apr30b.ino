@@ -5,17 +5,18 @@
 #include <WiFiNINA.h>
 #include <ArduinoHttpClient.h>
 #include "arduino_secrets.h"
-#include <Adafruit_SleepyDog.h> // Add watchdog timer
-#include <ArduinoJson.h>        
+#include <Adafruit_SleepyDog.h>
+#include <ArduinoJson.h>
 
 // WiFi Configuration
 char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 const char *server_address = SECRET_SERVER;
-const int server_port = SECRET_PORT;
+const int server_port = SECRET_PORT_HTTPS; // Use HTTPS port
 
-WiFiClient wifi_client;
-HttpClient http_client(wifi_client, server_address, server_port);
+// Use WiFiSSLClient for HTTPS
+WiFiSSLClient wifi_client;
+HttpClient http_client = HttpClient(wifi_client, SECRET_SERVER, SECRET_PORT_HTTPS);
 
 animation_t *smile;
 pet_t *pet;
@@ -65,6 +66,34 @@ void setup()
   USBDevice.detach();
   delay(100);
   USBDevice.attach();
+
+  // Test HTTPS connection without setInsecure() first
+  Serial.println("Testing HTTPS connection...");
+  if (wifi_client.connectSSL(SECRET_SERVER, SECRET_PORT_HTTPS))
+  {
+    Serial.println("SSL connection successful!");
+    wifi_client.stop();
+  }
+  else
+  {
+    Serial.println("SSL connection failed - trying with relaxed security...");
+
+// If connection fails, try with setInsecure if available
+#ifdef WIFI_SSL_CLIENT_INSECURE_AVAILABLE
+    wifi_client.setInsecure();
+    if (wifi_client.connectSSL(SECRET_SERVER, SECRET_PORT_HTTPS))
+    {
+      Serial.println("SSL connection successful with relaxed security!");
+      wifi_client.stop();
+    }
+    else
+    {
+      Serial.println("SSL connection still failed!");
+    }
+#else
+    Serial.println("setInsecure() not available in this WiFiNINA version");
+#endif
+  }
 
   Watchdog.reset(); // Reset watchdog after setup completes
 }
@@ -116,7 +145,7 @@ void sendPetDataToServer(pet_t *pet)
     if (WiFi.status() != WL_CONNECTED)
     {
       Serial.println("Reconnection failed, aborting data send.");
-      return; // Exit if reconnection failed
+      return;
     }
     Serial.println("WiFi reconnected.");
   }
@@ -125,7 +154,7 @@ void sendPetDataToServer(pet_t *pet)
   Watchdog.reset();
   Serial.println("Creating JSON payload...");
 
-  StaticJsonDocument<200> jsonDoc; 
+  StaticJsonDocument<200> jsonDoc;
   jsonDoc["hunger"] = pet->hunger;
   jsonDoc["happiness"] = pet->happiness;
   jsonDoc["tiredness"] = pet->tiredness;
@@ -146,10 +175,11 @@ void sendPetDataToServer(pet_t *pet)
   http_client.stop();
   http_client.setTimeout(10000); // 10 second timeout
 
+  Serial.println("Connecting via HTTPS...");
   Serial.println("Calling http_client.beginRequest()...");
   http_client.beginRequest();
   Serial.println("Calling http_client.post()...");
-  http_client.post("/api/PetData"); 
+  http_client.post("/api/PetData");
   Serial.println("Calling http_client.sendHeader() for Content-Type...");
   http_client.sendHeader("Content-Type", "application/json");
   Serial.println("Calling http_client.sendHeader() for Content-Length...");
@@ -160,12 +190,12 @@ void sendPetDataToServer(pet_t *pet)
   http_client.print(post_data);
   Serial.println("Calling http_client.endRequest()...");
   http_client.endRequest();
-  Serial.println("HTTP request sent.");
+  Serial.println("HTTPS request sent.");
 
   // Reset watchdog after request
   Watchdog.reset();
 
-  Serial.println("Processing HTTP response...");
+  Serial.println("Processing HTTPS response...");
   int status_code = http_client.responseStatusCode();
   String response_body = http_client.responseBody();
 
@@ -173,7 +203,7 @@ void sendPetDataToServer(pet_t *pet)
   Serial.println(status_code);
   Serial.print("Response: ");
   Serial.println(response_body);
-  Serial.println("Data sending process complete.");
+  Serial.println("HTTPS data sending process complete.");
 
   Watchdog.reset();
 }
@@ -287,7 +317,6 @@ void update_status_leds(pet_t *pet)
   // Update LEDs
   carrier.leds.show();
 }
-
 
 void pet_handle_events_modified(pet_t *pet)
 {

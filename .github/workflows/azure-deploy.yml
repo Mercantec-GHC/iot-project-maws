@@ -1,0 +1,59 @@
+
+name: Deploy TamaTown Central to Azure
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [closed]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  build-and-deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build solution
+      run: dotnet build --configuration Release --no-restore
+    
+    - name: Run tests (if any)
+      run: dotnet test --no-restore --verbosity normal --configuration Release
+      continue-on-error: true
+    
+    # Build and publish API
+    - name: Publish TamaTown API
+      run: dotnet publish API/API.csproj --configuration Release --output ./api-publish
+    
+    # Build and publish Blazor
+    - name: Publish TamaTown Blazor App
+      run: dotnet publish Blazor/Blazor.csproj --configuration Release --output ./blazor-publish
+    
+    # Deploy API to Azure App Service
+    - name: Deploy API to Azure App Service
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: 'TamaTownCentralAPI'
+        publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+        package: ./api-publish
+    
+    # Deploy Blazor to Azure App Service
+    - name: Deploy Blazor to Azure App Service
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: 'TamaTownCentral'
+        publish-profile: ${{ secrets.AZURE_BLAZOR_PUBLISH_PROFILE }}
+        package: ./blazor-publish

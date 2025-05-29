@@ -5,7 +5,6 @@ using DomainModels;
 using API.Data;
 using Microsoft.EntityFrameworkCore;
 
-
 public class Program
 {
     public static void Main(string[] args)
@@ -18,11 +17,20 @@ public class Program
         // Configure DBContext
         builder.Services.AddDbContext<AppDBContext>(options => options.UseNpgsql(connectionString));
 
-        // AuthenticationService Registration
+        // AuthenticationService Registration with relaxed cookie settings for development
         builder.Services.AddAuthentication("Cookies")
             .AddCookie("Cookies", options =>
             {
-
+                if (builder.Environment.IsDevelopment())
+                {
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development
+                    options.Cookie.SameSite = SameSiteMode.Lax; // More permissive for cross-origin
+                }
+                else
+                {
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only in production
+                    options.Cookie.SameSite = SameSiteMode.Strict;
+                }
             });
 
         // Register AppState
@@ -34,9 +42,14 @@ public class Program
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
+        // Configure HttpClient to work with both HTTP and HTTPS
         builder.Services.AddHttpClient("API", client =>
         {
-            client.BaseAddress = new Uri("https://localhost:7207/");
+            // Use HTTPS when available, fallback to HTTP in development
+            var baseUrl = builder.Environment.IsDevelopment() 
+                ? "http://localhost:5021/" 
+                : "https://localhost:7207/";
+            client.BaseAddress = new Uri(baseUrl);
         });
 
         builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
@@ -47,17 +60,20 @@ public class Program
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error");
-            // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
             app.UseHsts();
         }
 
-        app.UseHttpsRedirection();
+        // Conditional HTTPS redirection
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
+
         app.UseStaticFiles();
         app.UseAntiforgery();
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
 
         app.Run();
-
     }
 }
