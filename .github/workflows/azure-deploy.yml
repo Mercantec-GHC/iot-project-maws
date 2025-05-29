@@ -38,7 +38,7 @@ jobs:
       run: dotnet test "${{ env.SOLUTION_FILE_PATH }}" --no-build --verbosity normal --configuration Release
       continue-on-error: true # Or set to false if tests must pass
 
-- name: Publish API Project
+    - name: Publish API Project
       run: |
         echo "Current working directory: $(pwd)"
         echo "Attempting to create API publish directory manually: ${{ env.API_PUBLISH_OUTPUT_PATH }}"
@@ -49,12 +49,12 @@ jobs:
         ls -la "${{ env.API_PUBLISH_OUTPUT_PATH }}" || echo "API publish directory does not exist yet or ls failed."
         
         echo "Publishing API project: ${{ env.API_PROJECT_PATH }} with detailed verbosity"
-        # Ensure comments are on their own lines and not interfering with backslashes
-        # Removed --no-restore to let publish handle it if needed
+        # Comment: Removed --no-restore to let publish handle it if needed.
+        # The actual command starts on the next line.
         dotnet publish "${{ env.API_PROJECT_PATH }}" \
           --configuration Release \
           --output "${{ env.API_PUBLISH_OUTPUT_PATH }}" \
-          --verbosity detailed # Increased verbosity
+          --verbosity detailed
 
         echo ""
         echo "Listing contents of API publish directory (${{ env.API_PUBLISH_OUTPUT_PATH }}) after publish:"
@@ -72,6 +72,7 @@ jobs:
       env:
         API_PROJECT_PATH: ${{ env.API_PROJECT_PATH }}
         API_PUBLISH_OUTPUT_PATH: ${{ env.API_PUBLISH_OUTPUT_PATH }}
+
     # --- Simplified Blazor Publish ---
     - name: Publish Blazor Project
       run: |
@@ -86,9 +87,9 @@ jobs:
         ls -R "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
         echo ""
         echo "Verifying Blazor.dll presence in Blazor publish directory:"
-        if [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/Blazor.dll" ]; then # Note: For Blazor Wasm, the main DLL might be in a wwwroot subfolder.
+        if [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/Blazor.dll" ]; then
           echo "✅ Blazor.dll found directly in ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
-        elif [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/wwwroot/_framework/Blazor.dll" ]; then # Common for Blazor WASM
+        elif [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/wwwroot/_framework/Blazor.dll" ]; then
            echo "✅ Blazor.dll found in ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/wwwroot/_framework/"
         else
           echo "❌ CRITICAL: Blazor.dll NOT found in common locations within ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
@@ -99,7 +100,7 @@ jobs:
       if: success() # Or consider adding a check for API.dll presence
       uses: azure/webapps-deploy@v3
       with:
-        app-name: 'TamaTownCentralAPI'
+        app-name: 'TamaTownCentralAPI' # Replace with your API App Service name
         publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
         package: ${{ env.API_PUBLISH_OUTPUT_PATH }}
 
@@ -108,6 +109,6 @@ jobs:
       if: success() # Or consider adding a check for Blazor.dll presence
       uses: azure/webapps-deploy@v3
       with:
-        app-name: 'TamaTownCentral'
+        app-name: 'TamaTownCentral' # Replace with your Blazor App Service name
         publish-profile: ${{ secrets.AZURE_BLAZOR_PUBLISH_PROFILE }}
         package: ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}
