@@ -23,6 +23,13 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
+    - name: Show project structure
+      run: |
+        echo "Repository structure:"
+        find . -name "*.csproj" -type f | head -20
+        echo "Current directory contents:"
+        ls -la
+    
     - name: Restore dependencies
       run: dotnet restore H3-Projekt.sln
     
@@ -33,13 +40,75 @@ jobs:
       run: dotnet test H3-Projekt.sln --no-restore --verbosity normal --configuration Release
       continue-on-error: true
     
-    # Build and publish API
+    # Build and publish API with verbose logging
     - name: Publish TamaTown API
-      run: dotnet publish API/API.csproj --configuration Release --output ./api-publish
+      run: |
+        echo "Publishing API project..."
+        dotnet publish API/API.csproj --configuration Release --no-restore --output ./api-publish --verbosity normal
+        echo "API publish completed with exit code: $?"
     
-    # Build and publish Blazor
+    - name: Verify API publish contents
+      run: |
+        echo "Checking if api-publish directory exists..."
+        if [ -d "./api-publish" ]; then
+          echo "✅ API publish directory found!"
+          echo "Contents of api-publish directory:"
+          ls -la ./api-publish/
+          echo "File count: $(find ./api-publish -type f | wc -l)"
+          
+          # Check for essential files
+          if [ -f "./api-publish/API.dll" ]; then
+            echo "✅ API.dll found"
+          else
+            echo "❌ API.dll not found"
+          fi
+          
+          if [ -f "./api-publish/API.exe" ] || [ -f "./api-publish/API" ]; then
+            echo "✅ API executable found"
+          else
+            echo "⚠️ API executable not found (this might be normal for some deployments)"
+          fi
+        else
+          echo "❌ API publish directory not found!"
+          echo "Current directory contents:"
+          ls -la
+          exit 1
+        fi
+    
+    # Build and publish Blazor with verbose logging
     - name: Publish TamaTown Blazor App
-      run: dotnet publish Blazor/Blazor.csproj --configuration Release --output ./blazor-publish
+      run: |
+        echo "Publishing Blazor project..."
+        dotnet publish Blazor/Blazor.csproj --configuration Release --no-restore --output ./blazor-publish --verbosity normal
+        echo "Blazor publish completed with exit code: $?"
+    
+    - name: Verify Blazor publish contents
+      run: |
+        echo "Checking if blazor-publish directory exists..."
+        if [ -d "./blazor-publish" ]; then
+          echo "✅ Blazor publish directory found!"
+          echo "Contents of blazor-publish directory:"
+          ls -la ./blazor-publish/
+          echo "File count: $(find ./blazor-publish -type f | wc -l)"
+          
+          # Check for essential files
+          if [ -f "./blazor-publish/Blazor.dll" ]; then
+            echo "✅ Blazor.dll found"
+          else
+            echo "❌ Blazor.dll not found"
+          fi
+          
+          if [ -d "./blazor-publish/wwwroot" ]; then
+            echo "✅ wwwroot directory found"
+          else
+            echo "❌ wwwroot directory not found"
+          fi
+        else
+          echo "❌ Blazor publish directory not found!"
+          echo "Current directory contents:"
+          ls -la
+          exit 1
+        fi
     
     # Deploy API to Azure App Service
     - name: Deploy API to Azure App Service
