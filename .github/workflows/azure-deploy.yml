@@ -37,64 +37,46 @@ jobs:
     - name: List project structure
       run: |
         echo "Root directory contents:"
-        ls -la
+        ls -la ${{ github.workspace }}
         echo "API directory contents:"
-        ls -la API/
+        ls -la ${{ github.workspace }}/API/
         echo "Blazor directory contents:"
-        ls -la Blazor/
+        ls -la ${{ github.workspace }}/Blazor/
     
-    # Build and publish API with verbose output
+    # Build and publish API with verbose output to an absolute path
     - name: Publish TamaTown API
       run: |
-        echo "Publishing API project..."
-        dotnet publish API/API.csproj --configuration Release --output ./api-publish --verbosity normal
+        echo "Publishing API project to ${{ github.workspace }}/api_output_package"
+        dotnet publish API/API.csproj --configuration Release --output ${{ github.workspace }}/api_output_package --verbosity normal
         echo "Publish command completed with exit code: $?"
     
-    - name: List root directory contents (for debugging API publish)
+    # Verify API publish output location
+    - name: Verify API publish output
       run: |
-        echo "Listing contents of workspace root (${{ github.workspace }}):"
-        ls -la ${{ github.workspace }}
-        if [ -d "${{ github.workspace }}/api-publish" ]; then
-          echo "Found api-publish at root!"
+        echo "Checking for API output at ${{ github.workspace }}/api_output_package:"
+        ls -la ${{ github.workspace }}/api_output_package
+        if [ -d "${{ github.workspace }}/api_output_package" ]; then
+          echo "Found API output package directory!"
         else
-          echo "api-publish NOT found at root."
-        fi
-
-    - name: List API directory contents (to find the API publish folder)
-      run: |
-        echo "Listing contents of API directory (${{ github.workspace }}/API):"
-        ls -la ${{ github.workspace }}/API/
-        if [ -d "${{ github.workspace }}/API/api-publish" ]; then
-          echo "Found api-publish inside API directory!"
-        else
-          echo "api-publish NOT found inside API directory."
+          echo "API output package directory NOT found at ${{ github.workspace }}/api_output_package"
         fi
     
-    # Build and publish Blazor with verbose output
+    # Build and publish Blazor with verbose output to an absolute path
     - name: Publish TamaTown Blazor App
       run: |
-        echo "Publishing Blazor project..."
-        dotnet publish Blazor/Blazor.csproj --configuration Release --output ./blazor-publish --verbosity normal
+        echo "Publishing Blazor project to ${{ github.workspace }}/blazor_output_package"
+        dotnet publish Blazor/Blazor.csproj --configuration Release --output ${{ github.workspace }}/blazor_output_package --verbosity normal
         echo "Publish command completed with exit code: $?"
-    
-    - name: List root directory contents (for debugging Blazor publish)
-      run: |
-        echo "Listing contents of workspace root (${{ github.workspace }}):"
-        ls -la ${{ github.workspace }}
-        if [ -d "${{ github.workspace }}/blazor-publish" ]; then
-          echo "Found blazor-publish at root!"
-        else
-          echo "blazor-publish NOT found at root."
-        fi
 
-    - name: List Blazor directory contents (to find the Blazor publish folder)
+    # Verify Blazor publish output location
+    - name: Verify Blazor publish output
       run: |
-        echo "Listing contents of Blazor directory (${{ github.workspace }}/Blazor):"
-        ls -la ${{ github.workspace }}/Blazor/
-        if [ -d "${{ github.workspace }}/Blazor/blazor-publish" ]; then
-          echo "Found blazor-publish inside Blazor directory!"
+        echo "Checking for Blazor output at ${{ github.workspace }}/blazor_output_package:"
+        ls -la ${{ github.workspace }}/blazor_output_package
+        if [ -d "${{ github.workspace }}/blazor_output_package" ]; then
+          echo "Found Blazor output package directory!"
         else
-          echo "blazor-publish NOT found inside Blazor directory."
+          echo "Blazor output package directory NOT found at ${{ github.workspace }}/blazor_output_package"
         fi
     
     # Deploy API to Azure App Service (only if publish succeeded)
@@ -104,7 +86,7 @@ jobs:
       with:
         app-name: 'TamaTownCentralAPI'
         publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
-        package: ${{ github.workspace }}/API/api-publish 
+        package: ${{ github.workspace }}/api_output_package # Use the new absolute path
         slot-name: production
     
     # Deploy Blazor to Azure App Service (only if publish succeeded)
@@ -114,4 +96,4 @@ jobs:
       with:
         app-name: 'TamaTownCentral'
         publish-profile: ${{ secrets.AZURE_BLAZOR_PUBLISH_PROFILE }}
-        package: ${{ github.workspace }}/Blazor/blazor-publish
+        package: ${{ github.workspace }}/blazor_output_package # Use the new absolute path
