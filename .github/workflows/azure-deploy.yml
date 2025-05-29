@@ -34,32 +34,66 @@ jobs:
       run: dotnet test H3-Projekt.sln --no-restore --verbosity normal --configuration Release
       continue-on-error: true
     
-    # Build and publish API
+    # Debug: Check project structure
+    - name: List project structure
+      run: |
+        echo "Root directory contents:"
+        ls -la
+        echo "API directory contents:"
+        ls -la API/
+        echo "Blazor directory contents:"
+        ls -la Blazor/
+    
+    # Build and publish API with verbose output
     - name: Publish TamaTown API
-      run: dotnet publish API/API.csproj --configuration Release --no-build --output ./api-publish
+      run: |
+        echo "Publishing API project..."
+        dotnet publish API/API.csproj --configuration Release --output ./api-publish --verbosity normal
+        echo "Publish command completed with exit code: $?"
     
-    # Verify API publish output
+    # Verify API publish output (only if previous step succeeded)
     - name: List API publish contents
-      run: ls -la ./api-publish/
+      run: |
+        if [ -d "./api-publish" ]; then
+          echo "API publish directory exists:"
+          ls -la ./api-publish/
+        else
+          echo "API publish directory does not exist"
+          echo "Current directory contents:"
+          ls -la
+        fi
     
-    # Build and publish Blazor
+    # Build and publish Blazor with verbose output
     - name: Publish TamaTown Blazor App
-      run: dotnet publish Blazor/Blazor.csproj --configuration Release --no-build --output ./blazor-publish
+      run: |
+        echo "Publishing Blazor project..."
+        dotnet publish Blazor/Blazor.csproj --configuration Release --output ./blazor-publish --verbosity normal
+        echo "Publish command completed with exit code: $?"
     
-    # Verify Blazor publish output
+    # Verify Blazor publish output (only if previous step succeeded)
     - name: List Blazor publish contents
-      run: ls -la ./blazor-publish/
+      run: |
+        if [ -d "./blazor-publish" ]; then
+          echo "Blazor publish directory exists:"
+          ls -la ./blazor-publish/
+        else
+          echo "Blazor publish directory does not exist"
+          echo "Current directory contents:"
+          ls -la
+        fi
     
-    # Deploy API to Azure App Service
+    # Deploy API to Azure App Service (only if publish succeeded)
     - name: Deploy API to Azure App Service
+      if: success()
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'TamaTownCentralAPI'
         publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
         package: './api-publish'
     
-    # Deploy Blazor to Azure App Service
+    # Deploy Blazor to Azure App Service (only if publish succeeded)
     - name: Deploy Blazor to Azure App Service
+      if: success()
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'TamaTownCentral'
