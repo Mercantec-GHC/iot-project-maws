@@ -38,7 +38,7 @@ jobs:
       run: dotnet test "${{ env.SOLUTION_FILE_PATH }}" --no-build --verbosity normal --configuration Release
       continue-on-error: true # Or set to false if tests must pass
 
-- name: Publish API Project
+    - name: Publish API Project
       run: |
         echo "Current working directory: $(pwd)"
         echo "Attempting to create API publish directory manually: ${{ env.API_PUBLISH_OUTPUT_PATH }}"
@@ -67,10 +67,11 @@ jobs:
           echo "This will likely cause deployment issues."
           # Consider adding 'exit 1' here if API.dll is absolutely mandatory for the next steps
           # exit 1
-        fi                                                                                                                                                               
+        fi
       env: # Ensuring environment variables are explicitly available to this step if defined globally
         API_PROJECT_PATH: ${{ env.API_PROJECT_PATH }}
         API_PUBLISH_OUTPUT_PATH: ${{ env.API_PUBLISH_OUTPUT_PATH }}
+
     # --- Simplified Blazor Publish ---
     - name: Publish Blazor Project
       run: |
@@ -85,10 +86,12 @@ jobs:
         ls -R "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
         echo ""
         echo "Verifying Blazor.dll presence in Blazor publish directory:"
-        if [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/Blazor.dll" ]; then
-          echo "✅ Blazor.dll found in ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
+        if [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/Blazor.dll" ]; then # Note: For Blazor Wasm, the main DLL might be in a wwwroot subfolder.
+          echo "✅ Blazor.dll found directly in ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
+        elif [ -f "${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/wwwroot/_framework/Blazor.dll" ]; then # Common for Blazor WASM
+           echo "✅ Blazor.dll found in ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}/wwwroot/_framework/"
         else
-          echo "❌ CRITICAL: Blazor.dll NOT found in ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
+          echo "❌ CRITICAL: Blazor.dll NOT found in common locations within ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}"
         fi
 
     # Deploy API to Azure App Service
@@ -108,4 +111,3 @@ jobs:
         app-name: 'TamaTownCentral'
         publish-profile: ${{ secrets.AZURE_BLAZOR_PUBLISH_PROFILE }}
         package: ${{ env.BLAZOR_PUBLISH_OUTPUT_PATH }}
-
