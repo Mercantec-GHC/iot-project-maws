@@ -36,11 +36,19 @@ jobs:
     
     # Build and publish API
     - name: Publish TamaTown API
-      run: dotnet publish API/API.csproj --configuration Release --output ./api-publish
+      run: dotnet publish API/API.csproj --configuration Release --no-build --output ./api-publish
+    
+    # Verify API publish output
+    - name: List API publish contents
+      run: ls -la ./api-publish/
     
     # Build and publish Blazor
     - name: Publish TamaTown Blazor App
-      run: dotnet publish Blazor/Blazor.csproj --configuration Release --output ./blazor-publish
+      run: dotnet publish Blazor/Blazor.csproj --configuration Release --no-build --output ./blazor-publish
+    
+    # Verify Blazor publish output
+    - name: List Blazor publish contents
+      run: ls -la ./blazor-publish/
     
     # Deploy API to Azure App Service
     - name: Deploy API to Azure App Service
@@ -48,7 +56,7 @@ jobs:
       with:
         app-name: 'TamaTownCentralAPI'
         publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
-        package: ./api-publish
+        package: './api-publish'
     
     # Deploy Blazor to Azure App Service
     - name: Deploy Blazor to Azure App Service
@@ -56,4 +64,4 @@ jobs:
       with:
         app-name: 'TamaTownCentral'
         publish-profile: ${{ secrets.AZURE_BLAZOR_PUBLISH_PROFILE }}
-        package: ./blazor-publish
+        package: './blazor-publish'
