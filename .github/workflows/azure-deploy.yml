@@ -25,13 +25,13 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore H3-Projekt.sln
     
     - name: Build solution
-      run: dotnet build --configuration Release --no-restore
+      run: dotnet build H3-Projekt.sln --configuration Release --no-restore
     
     - name: Run tests (if any)
-      run: dotnet test --no-restore --verbosity normal --configuration Release
+      run: dotnet test H3-Projekt.sln --no-restore --verbosity normal --configuration Release
       continue-on-error: true
     
     # Build and publish API
