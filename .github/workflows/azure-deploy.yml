@@ -1,4 +1,3 @@
-
 name: Deploy TamaTown Central to Azure
 
 on:
@@ -51,16 +50,24 @@ jobs:
         dotnet publish API/API.csproj --configuration Release --output ./api-publish --verbosity normal
         echo "Publish command completed with exit code: $?"
     
-    # Verify API publish output (only if previous step succeeded)
-    - name: List API publish contents
+    - name: List root directory contents (for debugging API publish)
       run: |
-        if [ -d "./api-publish" ]; then
-          echo "API publish directory exists:"
-          ls -la ./api-publish/
+        echo "Listing contents of workspace root (${{ github.workspace }}):"
+        ls -la ${{ github.workspace }}
+        if [ -d "${{ github.workspace }}/api-publish" ]; then
+          echo "Found api-publish at root!"
         else
-          echo "API publish directory does not exist"
-          echo "Current directory contents:"
-          ls -la
+          echo "api-publish NOT found at root."
+        fi
+
+    - name: List API directory contents (to find the API publish folder)
+      run: |
+        echo "Listing contents of API directory (${{ github.workspace }}/API):"
+        ls -la ${{ github.workspace }}/API/
+        if [ -d "${{ github.workspace }}/API/api-publish" ]; then
+          echo "Found api-publish inside API directory!"
+        else
+          echo "api-publish NOT found inside API directory."
         fi
     
     # Build and publish Blazor with verbose output
@@ -70,16 +77,24 @@ jobs:
         dotnet publish Blazor/Blazor.csproj --configuration Release --output ./blazor-publish --verbosity normal
         echo "Publish command completed with exit code: $?"
     
-    # Verify Blazor publish output (only if previous step succeeded)
-    - name: List Blazor publish contents
+    - name: List root directory contents (for debugging Blazor publish)
       run: |
-        if [ -d "./blazor-publish" ]; then
-          echo "Blazor publish directory exists:"
-          ls -la ./blazor-publish/
+        echo "Listing contents of workspace root (${{ github.workspace }}):"
+        ls -la ${{ github.workspace }}
+        if [ -d "${{ github.workspace }}/blazor-publish" ]; then
+          echo "Found blazor-publish at root!"
         else
-          echo "Blazor publish directory does not exist"
-          echo "Current directory contents:"
-          ls -la
+          echo "blazor-publish NOT found at root."
+        fi
+
+    - name: List Blazor directory contents (to find the Blazor publish folder)
+      run: |
+        echo "Listing contents of Blazor directory (${{ github.workspace }}/Blazor):"
+        ls -la ${{ github.workspace }}/Blazor/
+        if [ -d "${{ github.workspace }}/Blazor/blazor-publish" ]; then
+          echo "Found blazor-publish inside Blazor directory!"
+        else
+          echo "blazor-publish NOT found inside Blazor directory."
         fi
     
     # Deploy API to Azure App Service (only if publish succeeded)
@@ -89,7 +104,8 @@ jobs:
       with:
         app-name: 'TamaTownCentralAPI'
         publish-profile: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
-        package: './api-publish'
+        package: ${{ github.workspace }}/API/api-publish 
+        slot-name: production
     
     # Deploy Blazor to Azure App Service (only if publish succeeded)
     - name: Deploy Blazor to Azure App Service
@@ -98,4 +114,4 @@ jobs:
       with:
         app-name: 'TamaTownCentral'
         publish-profile: ${{ secrets.AZURE_BLAZOR_PUBLISH_PROFILE }}
-        package: './blazor-publish'
+        package: ${{ github.workspace }}/Blazor/blazor-publish
