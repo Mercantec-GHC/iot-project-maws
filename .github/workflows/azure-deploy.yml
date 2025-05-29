@@ -38,18 +38,26 @@ jobs:
       run: dotnet test "${{ env.SOLUTION_FILE_PATH }}" --no-build --verbosity normal --configuration Release
       continue-on-error: true # Or set to false if tests must pass
 
-    # --- Simplified and Corrected API Publish ---
-    - name: Publish API Project
+- name: Publish API Project
       run: |
-        echo "Publishing API project: ${{ env.API_PROJECT_PATH }}"
+        echo "Current working directory: $(pwd)"
+        echo "Attempting to create API publish directory manually: ${{ env.API_PUBLISH_OUTPUT_PATH }}"
+        mkdir -p "${{ env.API_PUBLISH_OUTPUT_PATH }}"
+        echo "Listing contents of current directory before publish:"
+        ls -la
+        echo "Listing contents of API publish directory (if it exists) before publish:"
+        ls -la "${{ env.API_PUBLISH_OUTPUT_PATH }}" || echo "API publish directory does not exist yet or ls failed."
+        
+        echo "Publishing API project: ${{ env.API_PROJECT_PATH }} with detailed verbosity"
         dotnet publish "${{ env.API_PROJECT_PATH }}" \
           --configuration Release \
-          --no-restore \
+          # Removed --no-restore to let publish handle it if needed
           --output "${{ env.API_PUBLISH_OUTPUT_PATH }}" \
-          --verbosity normal
+          --verbosity detailed # Increased verbosity
+
         echo ""
-        echo "Listing contents of API publish directory (${{ env.API_PUBLISH_OUTPUT_PATH }}):"
-        ls -R "${{ env.API_PUBLISH_OUTPUT_PATH }}"
+        echo "Listing contents of API publish directory (${{ env.API_PUBLISH_OUTPUT_PATH }}) after publish:"
+        ls -R "${{ env.API_PUBLISH_OUTPUT_PATH }}" || echo "Failed to list contents of API publish directory."
         echo ""
         echo "Verifying API.dll presence in API publish directory:"
         if [ -f "${{ env.API_PUBLISH_OUTPUT_PATH }}/API.dll" ]; then
@@ -57,9 +65,12 @@ jobs:
         else
           echo "❌ CRITICAL: API.dll NOT found in ${{ env.API_PUBLISH_OUTPUT_PATH }}"
           echo "This will likely cause deployment issues."
-          # Optionally, exit 1 here if this is a hard requirement before deploying
-        fi
-
+          # Consider adding 'exit 1' here if API.dll is absolutely mandatory for the next steps
+          # exit 1
+        fi                                                                                                                                                               
+      env: # Ensuring environment variables are explicitly available to this step if defined globally
+        API_PROJECT_PATH: ${{ env.API_PROJECT_PATH }}
+        API_PUBLISH_OUTPUT_PATH: ${{ env.API_PUBLISH_OUTPUT_PATH }}
     # --- Simplified Blazor Publish ---
     - name: Publish Blazor Project
       run: |
