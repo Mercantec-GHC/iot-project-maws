@@ -1,16 +1,12 @@
-﻿using DomainModels;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace DomainModels
 {
-	public class User
-	{
+    public class User
+    {
         [Column("userid")]
         public int UserId { get; set; }
 
@@ -37,14 +33,8 @@ namespace DomainModels
         [Column("phonenr")]
         public string? PhoneNr { get; set; }
 
+        // Navigation properties
+        public virtual ICollection<PetData> PetData { get; set; } = new List<PetData>();
+        public virtual ICollection<DeviceRegistration> DeviceRegistrations { get; set; } = new List<DeviceRegistration>();
     }
 }
-
-
-
-
-
-
-
-
-

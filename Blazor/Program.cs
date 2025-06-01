@@ -17,39 +17,20 @@ public class Program
         // Configure DBContext
         builder.Services.AddDbContext<AppDBContext>(options => options.UseNpgsql(connectionString));
 
-        // AuthenticationService Registration with relaxed cookie settings for development
-        builder.Services.AddAuthentication("Cookies")
-            .AddCookie("Cookies", options =>
-            {
-                if (builder.Environment.IsDevelopment())
-                {
-                    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Allow HTTP in development
-                    options.Cookie.SameSite = SameSiteMode.Lax; // More permissive for cross-origin
-                }
-                else
-                {
-                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only in production
-                    options.Cookie.SameSite = SameSiteMode.Strict;
-                }
-            });
-
         // Register AppState
         builder.Services.AddScoped<AppState>();
-
         builder.Services.AddScoped<MailServices>();
 
         // Add services to the container.
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
-        // Configure HttpClient to use ApiBaseUrl from configuration
+        // Configure HttpClient to connect to local API via HTTP
         builder.Services.AddHttpClient("API", client =>
         {
-            var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? 
-                     (builder.Environment.IsDevelopment() 
-                         ? "http://localhost:5021/" 
-                         : "https://tama-town-central-api.onrender.com/");
-            client.BaseAddress = new Uri(apiBaseUrl);
+            // Use HTTP for local development to match Arduino requirements
+            client.BaseAddress = new Uri("http://localhost:5021/");
+            client.Timeout = TimeSpan.FromSeconds(30);
         });
 
         builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
@@ -63,7 +44,7 @@ public class Program
             app.UseHsts();
         }
 
-        // Conditional HTTPS redirection
+        // Only redirect to HTTPS for production
         if (!app.Environment.IsDevelopment())
         {
             app.UseHttpsRedirection();

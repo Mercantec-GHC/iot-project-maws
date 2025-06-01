@@ -3,20 +3,18 @@ using API.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Net.NetworkInformation;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Connection to database.
 builder.Services.AddDbContext<AppDBContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Configure JWT authentication with relaxed HTTPS requirements for development
+// Configure JWT authentication with HTTP support for Arduino
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -31,40 +29,43 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
 
-        // Allow HTTP requests in development
-        if (builder.Environment.IsDevelopment())
+        // Allow HTTP requests for Arduino compatibility
+        options.RequireHttpsMetadata = false;
+        
+        // Allow token from query string for Arduino if needed
+        options.Events = new JwtBearerEvents
         {
-            options.RequireHttpsMetadata = false;
-        }
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
-// Add CORS configuration - allow both development and production origins
+// Add CORS configuration for Arduino and Blazor
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAllOrigins", corsBuilder =>
+    options.AddPolicy("AllowArduinoAndBlazor", corsBuilder =>
     {
-        var allowedOrigins = new List<string>
-        {
-            // Development origins
-            "https://localhost:7091",
-            "http://localhost:5021",
-            "https://localhost:7207",
-            "http://192.168.1.16:5021",
-            "https://192.168.1.16:7207",
-            "http://localhost:5143"
-        };
-
-        // Add production origins from environment variables or configuration
-        var productionBlazorUrl = builder.Configuration["AllowedOrigins:BlazorApp"];
-        if (!string.IsNullOrEmpty(productionBlazorUrl))
-        {
-            allowedOrigins.Add(productionBlazorUrl);
-        }
-
-        corsBuilder.WithOrigins(allowedOrigins.ToArray())
+        corsBuilder.WithOrigins(
+                "http://localhost:5143",    // Blazor HTTP
+                "https://localhost:7091",   // Blazor HTTPS
+                "http://localhost:7646",    // Blazor IIS Express
+                "https://localhost:44349"   // Blazor IIS Express HTTPS
+            )
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
+            
+        // Also allow any origin for Arduino (you might want to restrict this in production)
+        corsBuilder.SetIsOriginAllowed(origin => true)
+            .AllowAnyMethod()
+            .AllowAnyHeader();
     });
 });
 
@@ -77,22 +78,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Conditional HTTPS redirection - only redirect browser requests, not API calls
-app.Use(async (context, next) =>
-{
-    // Skip HTTPS redirection for API endpoints to allow Arduino HTTP calls
-    if (!context.Request.Path.StartsWithSegments("/api") && 
-        !context.Request.IsHttps && 
-        !app.Environment.IsDevelopment())
-    {
-        var httpsUrl = $"https://{context.Request.Host}{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}";
-        context.Response.Redirect(httpsUrl);
-        return;
-    }
-    await next();
-});
+// DO NOT redirect HTTP to HTTPS for Arduino compatibility
+// Remove or comment out: app.UseHttpsRedirection();
 
-app.UseCors("AllowAllOrigins");
+app.UseCors("AllowArduinoAndBlazor");
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -8,73 +8,146 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 
-
 <h3>Your Profile</h3>
 <button class="btn btn-danger" @onclick="DeleteUserProfile">Slet Profil</button>
 <a href="/EditProfile/@AppState.UserId" class="btn btn-primary">Rediger Profil</a>
 
+<!-- Device Management Section -->
+<div class="device-management-container">
+    <h4>Your Devices</h4>
+    
+    @if (devices.Count == 0)
+    {
+        <p>No devices registered. Register your Arduino device to start receiving pet data.</p>
+    }
+    else
+    {
+        <div class="devices-list">
+            @foreach (var device in devices)
+            {
+                <div class="device-card">
+                    <div class="device-info">
+                        <h5>@device.DeviceName</h5>
+                        <p><strong>Device ID:</strong> @device.DeviceId</p>
+                        <p><strong>Status:</strong> @(device.IsActive ? "Active" : "Inactive")</p>
+                        <p><strong>Last Data:</strong> @(device.LastDataReceived?.ToString("dd/MM/yyyy HH:mm") ?? "Never")</p>
+                    </div>
+                    <div class="device-actions">
+                        <button class="btn btn-sm btn-secondary" @onclick="() => EditDevice(device)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteDevice(device)">Remove</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    
+    <button class="btn btn-success" @onclick="ShowRegisterDevice">Register New Device</button>
+</div>
+
+<!-- Device Registration Modal -->
+@if (showRegisterModal)
+{
+    <div class="modal-overlay" @onclick="CloseRegisterModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <h4>Register New Device</h4>
+            <form @onsubmit="RegisterDevice" @onsubmit:preventDefault="true">
+                <div class="form-group">
+                    <label for="deviceId">Device ID:</label>
+                    <input type="text" id="deviceId" @bind="newDevice.DeviceId" class="form-control" placeholder="Enter Arduino MAC address or ID" required />
+                    <small class="form-text text-muted">Find this in your Arduino Serial Monitor</small>
+                </div>
+                <div class="form-group">
+                    <label for="deviceName">Device Name:</label>
+                    <input type="text" id="deviceName" @bind="newDevice.DeviceName" class="form-control" placeholder="e.g., Living Room Pet Monitor" required />
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" class="btn btn-primary">Register Device</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseRegisterModal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
 <!-- Pet Status Graphs Section -->
 <div class="pet-stats-container">
     <h4>Pet Status History</h4>
-    <div class="row">
-        <div class="col-md-12">
-            <div class="chart-container">
-                <canvas id="petStatsChart"></canvas>
+    
+    @if (devices.Count > 1)
+    {
+        <div class="device-selector">
+            <label for="selectedDevice">Select Device:</label>
+            <select id="selectedDevice" @onchange="OnDeviceSelected" class="form-control">
+                <option value="">All Devices</option>
+                @foreach (var device in devices)
+                {
+                    <option value="@device.DeviceId">@device.DeviceName</option>
+                }
+            </select>
+        </div>
+    }
+    
+    @if (petDataHistory.Count > 0)
+    {
+        <div class="row">
+            <div class="col-md-12">
+                <div class="chart-container">
+                    <canvas id="petStatsChart"></canvas>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="row mt-4">
-        <div class="col-md-4">
-            <div class="stat-card">
-                <h5>Hunger</h5>
-                <canvas id="hungerChart"></canvas>
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <h5>Hunger</h5>
+                    <canvas id="hungerChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <h5>Happiness</h5>
+                    <canvas id="happinessChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <h5>Tiredness</h5>
+                    <canvas id="tirednessChart"></canvas>
+                </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stat-card">
-                <h5>Happiness</h5>
-                <canvas id="happinessChart"></canvas>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="stat-card">
-                <h5>Tiredness</h5>
-                <canvas id="tirednessChart"></canvas>
-            </div>
-        </div>
-    </div>
+    }
+    else
+    {
+        <p>No pet data available. Make sure your Arduino device is sending data.</p>
+    }
 </div>
 
 <!-- Display any error or status messages -->
 @if (!string.IsNullOrEmpty(message))
 {
-    <p>@message</p>
+    <div class="alert alert-info">@message</div>
 }
 
 @code {
-    private void EditProfile()
-    {
-        NavigationManager.NavigateTo($"/EditProfile/{AppState.UserId}"); // Use LoggedInUserId
-    }
-
     public int UserId { get; set; }
-
-    // Message for error or status display
     string message = "";
-
-    // User object to represent the logged-in user
     private User user = new User();
-    
-    // Pet data history for charts
     private List<PetData> petDataHistory = new List<PetData>();
+    private List<DeviceRegistration> devices = new List<DeviceRegistration>();
+    
+    // Device registration
+    private bool showRegisterModal = false;
+    private RegisterDeviceRequest newDevice = new RegisterDeviceRequest();
+    private string selectedDeviceId = "";
 
-    // Called when the page initializes
     protected override async Task OnInitializedAsync()
     {
-        // Fetch the user details first (assumed you're passing userId somehow, e.g., route parameter)
         if (!AppState.LoggedIn) return;
         UserId = AppState.UserId;
+        
         await FetchUserDetails();
+        await FetchDevices();
         await FetchPetDataHistory();
     }
 
@@ -86,14 +159,11 @@
         }
     }
 
-    // Method to fetch user details
     async Task FetchUserDetails()
     {
         try
         {
-            // Assuming you're fetching the logged-in user's details by some identifier (userId)
             user = await HttpClient.GetFromJsonAsync<User>($"api/Users/{UserId}");
-
             if (user == null)
             {
                 message = "Failed to fetch user details.";
@@ -105,17 +175,38 @@
         }
     }
 
-    // Method to fetch pet data history
+    async Task FetchDevices()
+    {
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+            HttpClient.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            
+            devices = await HttpClient.GetFromJsonAsync<List<DeviceRegistration>>("api/DeviceRegistration") ?? new List<DeviceRegistration>();
+        }
+        catch (Exception ex)
+        {
+            message = $"Error loading devices: {ex.Message}";
+        }
+    }
+
     async Task FetchPetDataHistory()
     {
         try
         {
-            petDataHistory = await HttpClient.GetFromJsonAsync<List<PetData>>("api/PetData");
+            var token = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+            HttpClient.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             
-            // Sort by timestamp to ensure chronological order
+            string endpoint = string.IsNullOrEmpty(selectedDeviceId) 
+                ? "api/PetData" 
+                : $"api/PetData/device/{selectedDeviceId}";
+                
+            petDataHistory = await HttpClient.GetFromJsonAsync<List<PetData>>(endpoint) ?? new List<PetData>();
+            
             petDataHistory = petDataHistory.OrderBy(p => p.Timestamp).ToList();
             
-            // Limit to last 50 data points if there are too many
             if (petDataHistory.Count > 50)
             {
                 petDataHistory = petDataHistory.Skip(petDataHistory.Count - 50).ToList();
@@ -127,18 +218,99 @@
         }
     }
 
-    // Render charts using JavaScript interop with Chart.js
+    async Task OnDeviceSelected(ChangeEventArgs e)
+    {
+        selectedDeviceId = e.Value?.ToString() ?? "";
+        await FetchPetDataHistory();
+        if (petDataHistory.Count > 0)
+        {
+            await RenderChartsAsync();
+        }
+    }
+
+    void ShowRegisterDevice()
+    {
+        newDevice = new RegisterDeviceRequest();
+        showRegisterModal = true;
+    }
+
+    void CloseRegisterModal()
+    {
+        showRegisterModal = false;
+    }
+
+    async Task RegisterDevice()
+    {
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+            HttpClient.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            
+            var response = await HttpClient.PostAsJsonAsync("api/DeviceRegistration", newDevice);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                message = "Device registered successfully!";
+                showRegisterModal = false;
+                await FetchDevices();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                message = $"Failed to register device: {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Error registering device: {ex.Message}";
+        }
+    }
+
+    async Task EditDevice(DeviceRegistration device)
+    {
+        // Implement edit functionality
+        message = "Edit functionality to be implemented";
+    }
+
+    async Task DeleteDevice(DeviceRegistration device)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to remove device '{device.DeviceName}'?"))
+        {
+            try
+            {
+                var token = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "authToken");
+                HttpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                
+                var response = await HttpClient.DeleteAsync($"api/DeviceRegistration/{device.DeviceRegistrationId}");
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    message = "Device removed successfully!";
+                    await FetchDevices();
+                }
+                else
+                {
+                    message = "Failed to remove device.";
+                }
+            }
+            catch (Exception ex)
+            {
+                message = $"Error removing device: {ex.Message}";
+            }
+        }
+    }
+
     async Task RenderChartsAsync()
     {
         if (petDataHistory.Count == 0) return;
 
-        // Prepare data for charts
         var labels = petDataHistory.Select(p => p.Timestamp.ToString("MM/dd HH:mm")).ToArray();
         var hungerData = petDataHistory.Select(p => p.Hunger).ToArray();
         var happinessData = petDataHistory.Select(p => p.Happiness).ToArray();
         var tirednessData = petDataHistory.Select(p => p.Tiredness).ToArray();
 
-        // Create combined chart
         await JSRuntime.InvokeVoidAsync("createCombinedChart", 
             "petStatsChart", 
             labels, 
@@ -146,7 +318,6 @@
             happinessData, 
             tirednessData);
 
-        // Create individual charts
         await JSRuntime.InvokeVoidAsync("createSingleStatChart", "hungerChart", labels, hungerData, "rgb(255, 99, 132)");
         await JSRuntime.InvokeVoidAsync("createSingleStatChart", "happinessChart", labels, happinessData, "rgb(75, 192, 192)");
         await JSRuntime.InvokeVoidAsync("createSingleStatChart", "tirednessChart", labels, tirednessData, "rgb(255, 159, 64)");
@@ -154,14 +325,11 @@
 
     private async Task DeleteUserProfile()
     {
-        // Bekræftelse dialog
         if (await JSRuntime.InvokeAsync<bool>("confirm", "Er du sikker på, at du vil slette din profil? Denne handling kan ikke fortrydes."))
         {
             try
             {
                 var userId = AppState.UserId;
-
-                // Send en DELETE request til API'en
                 var response = await HttpClient.DeleteAsync($"api/Users/{userId}");
 
                 if (response.IsSuccessStatusCode)
@@ -176,15 +344,21 @@
             }
             catch (Exception ex)
             {
-                // Log fejl og vis brugervenlig besked
                 Console.Error.WriteLine(ex.Message);
                 message = "Der opstod en fejl. Kontakt venligst administrator.";
             }
         }
     }
+
+    public class RegisterDeviceRequest
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string DeviceName { get; set; } = string.Empty;
+    }
 }
 
 <style>
+    /* Existing styles... */
     .profile-container {
         max-width: 800px;
         margin: 0 auto;
@@ -192,36 +366,6 @@
         background-color: #f4f4f9;
         border-radius: 10px;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    .profile-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .profile-info {
-        flex-grow: 1;
-        margin-left: 20px;
-    }
-
-    .profile-name {
-        font-size: 2em;
-        font-weight: bold;
-        color: #333;
-    }
-
-    .profile-role {
-        font-size: 1.2em;
-        color: #666;
-    }
-
-    .profile-content {
-        margin-top: 40px;
-        padding: 20px;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
     }
 
     .btn-primary {
@@ -236,6 +380,105 @@
         font-size: 16px;
         margin: 4px 2px;
         border-radius: 8px;
+    }
+
+    /* Device Management Styles */
+    .device-management-container {
+        margin-top: 30px;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .devices-list {
+        margin: 20px 0;
+    }
+
+    .device-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        background-color: #f8f9fa;
+    }
+
+    .device-info h5 {
+        margin: 0 0 5px 0;
+        color: #333;
+    }
+
+    .device-info p {
+        margin: 2px 0;
+        font-size: 0.9em;
+        color: #666;
+    }
+
+    .device-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .device-selector {
+        margin-bottom: 20px;
+    }
+
+    .device-selector label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
     }
 
     /* Pet Stats Chart Styles */
@@ -266,5 +509,17 @@
         text-align: center;
         margin-bottom: 15px;
         color: #333;
+    }
+
+    .alert {
+        padding: 10px;
+        border-radius: 4px;
+        margin: 10px 0;
+    }
+
+    .alert-info {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
     }
 </style>
