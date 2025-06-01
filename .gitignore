@@ -1,11 +1,11 @@
 **/appsettings.json
 **/appsettings.Development.json
-**/ArduinoKode/arduino_secrets.h
+**/ArduinoKode/sketch_apr30b_4/arduino_secrets.h
 bin/
 obj/
 .vs/
 
 /API/appsettings.json
 /Blazor/appsettings.json
-/ArduinoKode/arduino_secrets.h
+ArduinoKode/sketch_apr30b_4/arduino_secrets.h
 /sketch_apr30b 2/sketch_apr30b/carrier.h

@@ -12,11 +12,11 @@
 char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 const char *server_address = SECRET_SERVER;
-const int server_port = SECRET_PORT_HTTPS; // Use HTTPS port
+const int server_port = SECRET_PORT_HTTP; // Changed to HTTP port
 
-// Use WiFiSSLClient for HTTPS
-WiFiSSLClient wifi_client;
-HttpClient http_client = HttpClient(wifi_client, SECRET_SERVER, SECRET_PORT_HTTPS);
+// Use WiFiClient for HTTP (not WiFiSSLClient)
+WiFiClient wifi_client;
+HttpClient http_client = HttpClient(wifi_client, SECRET_SERVER, SECRET_PORT_HTTP);
 
 animation_t *smile;
 pet_t *pet;
@@ -62,37 +62,24 @@ void setup()
   // WiFi Init
   connectToWiFi();
 
+  // Display device information for registration
+  displayDeviceInfo();
+
   // Configure power settings
   USBDevice.detach();
   delay(100);
   USBDevice.attach();
 
-  // Test HTTPS connection without setInsecure() first
-  Serial.println("Testing HTTPS connection...");
-  if (wifi_client.connectSSL(SECRET_SERVER, SECRET_PORT_HTTPS))
+  // Test HTTP connection (much simpler than HTTPS)
+  Serial.println("Testing HTTP connection...");
+  if (wifi_client.connect(SECRET_SERVER, SECRET_PORT_HTTP))
   {
-    Serial.println("SSL connection successful!");
+    Serial.println("HTTP connection successful!");
     wifi_client.stop();
   }
   else
   {
-    Serial.println("SSL connection failed - trying with relaxed security...");
-
-// If connection fails, try with setInsecure if available
-#ifdef WIFI_SSL_CLIENT_INSECURE_AVAILABLE
-    wifi_client.setInsecure();
-    if (wifi_client.connectSSL(SECRET_SERVER, SECRET_PORT_HTTPS))
-    {
-      Serial.println("SSL connection successful with relaxed security!");
-      wifi_client.stop();
-    }
-    else
-    {
-      Serial.println("SSL connection still failed!");
-    }
-#else
-    Serial.println("setInsecure() not available in this WiFiNINA version");
-#endif
+    Serial.println("HTTP connection failed!");
   }
 
   Watchdog.reset(); // Reset watchdog after setup completes
@@ -101,24 +88,57 @@ void setup()
 void connectToWiFi()
 {
   Serial.println("Connecting to WiFi...");
-
+  Serial.print("SSID: ");
+  Serial.println(ssid);
+  
   // Check WiFi module
   if (WiFi.status() == WL_NO_MODULE)
   {
     Serial.println("Communication with WiFi module failed!");
-    while (true)
-      ; // Don't continue
+    while (true); // Don't continue
   }
+
+  String fv = WiFi.firmwareVersion();
+  Serial.print("WiFi firmware version: ");
+  Serial.println(fv);
 
   // Attempt to connect to WiFi network
   int attempts = 0;
   WiFi.begin(ssid, pass);
 
-  while (WiFi.status() != WL_CONNECTED && attempts < 10)
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) // Increased attempts
   {
     delay(1000);
     Serial.print(".");
+    Serial.print(" Status: ");
+    Serial.print(WiFi.status());
     attempts++;
+    
+    // Print status codes for debugging
+    switch(WiFi.status()) {
+      case WL_IDLE_STATUS:
+        Serial.print(" (IDLE)");
+        break;
+      case WL_NO_SSID_AVAIL:
+        Serial.print(" (NO_SSID)");
+        break;
+      case WL_SCAN_COMPLETED:
+        Serial.print(" (SCAN_COMPLETED)");
+        break;
+      case WL_CONNECTED:
+        Serial.print(" (CONNECTED)");
+        break;
+      case WL_CONNECT_FAILED:
+        Serial.print(" (CONNECT_FAILED)");
+        break;
+      case WL_CONNECTION_LOST:
+        Serial.print(" (CONNECTION_LOST)");
+        break;
+      case WL_DISCONNECTED:
+        Serial.print(" (DISCONNECTED)");
+        break;
+    }
+    Serial.println();
   }
 
   if (WiFi.status() == WL_CONNECTED)
@@ -126,11 +146,60 @@ void connectToWiFi()
     Serial.println("\nWiFi connected successfully!");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
+    Serial.print("Signal Strength (RSSI): ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
   }
   else
   {
-    Serial.println("\nFailed to connect to WiFi. Check credentials or network availability.");
+    Serial.println("\nFailed to connect to WiFi.");
+    Serial.print("Final status: ");
+    Serial.println(WiFi.status());
+    
+    // Scan for available networks
+    Serial.println("Scanning for available networks...");
+    int numSsid = WiFi.scanNetworks();
+    Serial.print("Number of available networks: ");
+    Serial.println(numSsid);
+    
+    for (int thisNet = 0; thisNet < numSsid; thisNet++) {
+      Serial.print(thisNet);
+      Serial.print(") ");
+      Serial.print(WiFi.SSID(thisNet));
+      Serial.print("\tSignal: ");
+      Serial.print(WiFi.RSSI(thisNet));
+      Serial.print(" dBm");
+      Serial.print("\tEncryption: ");
+      Serial.println(WiFi.encryptionType(thisNet));
+    }
   }
+}
+
+void displayDeviceInfo() {
+  // Get MAC address using the correct WiFiNINA method
+  byte mac[6];
+  WiFi.macAddress(mac);
+  String deviceId = "";
+  for (int i = 5; i >= 0; i--) {
+    if (mac[i] < 16) deviceId += "0";
+    deviceId += String(mac[i], HEX);
+  }
+  deviceId.toUpperCase();
+  
+  Serial.println("=== DEVICE INFORMATION ===");
+  Serial.print("Device ID (for registration): ");
+  Serial.println(deviceId);
+  
+  Serial.print("MAC Address: ");
+  for (int i = 5; i >= 0; i--) {
+    if (mac[i] < 16) Serial.print("0");
+    Serial.print(mac[i], HEX);
+    if (i > 0) Serial.print(":");
+  }
+  Serial.println();
+  
+  Serial.println("Register this device in the web app to start sending data!");
+  Serial.println("========================");
 }
 
 void sendPetDataToServer(pet_t *pet)
@@ -154,18 +223,30 @@ void sendPetDataToServer(pet_t *pet)
   Watchdog.reset();
   Serial.println("Creating JSON payload...");
 
-  StaticJsonDocument<200> jsonDoc;
+  // Get MAC address as device ID using the correct WiFiNINA method
+  byte mac[6];
+  WiFi.macAddress(mac);
+  String deviceId = "";
+  for (int i = 5; i >= 0; i--) {
+    if (mac[i] < 16) deviceId += "0";
+    deviceId += String(mac[i], HEX);
+  }
+  deviceId.toUpperCase();
+  
+  StaticJsonDocument<250> jsonDoc; // Increased size slightly for deviceId
+  jsonDoc["deviceId"] = deviceId;  // Device ID for registration
   jsonDoc["hunger"] = pet->hunger;
   jsonDoc["happiness"] = pet->happiness;
   jsonDoc["tiredness"] = pet->tiredness;
-  int lifespan_percent = (int)((float)pet->lifespan / MAX_LIFESPAN * 100);
-  jsonDoc["lifespan"] = lifespan_percent;
+  // Note: Removed lifespan as it's not in the new API model
 
   String post_data;
   serializeJson(jsonDoc, post_data);
 
   Serial.print("JSON payload: ");
   Serial.println(post_data);
+  Serial.print("Device ID: ");
+  Serial.println(deviceId);
 
   // Reset watchdog before HTTP operations
   Watchdog.reset();
@@ -175,7 +256,7 @@ void sendPetDataToServer(pet_t *pet)
   http_client.stop();
   http_client.setTimeout(10000); // 10 second timeout
 
-  Serial.println("Connecting via HTTPS...");
+  Serial.println("Connecting via HTTP...");
   Serial.println("Calling http_client.beginRequest()...");
   http_client.beginRequest();
   Serial.println("Calling http_client.post()...");
@@ -190,12 +271,12 @@ void sendPetDataToServer(pet_t *pet)
   http_client.print(post_data);
   Serial.println("Calling http_client.endRequest()...");
   http_client.endRequest();
-  Serial.println("HTTPS request sent.");
+  Serial.println("HTTP request sent.");
 
   // Reset watchdog after request
   Watchdog.reset();
 
-  Serial.println("Processing HTTPS response...");
+  Serial.println("Processing HTTP response...");
   int status_code = http_client.responseStatusCode();
   String response_body = http_client.responseBody();
 
@@ -203,11 +284,25 @@ void sendPetDataToServer(pet_t *pet)
   Serial.println(status_code);
   Serial.print("Response: ");
   Serial.println(response_body);
-  Serial.println("HTTPS data sending process complete.");
+  
+  // Handle different response codes
+  if (status_code == 200) {
+    Serial.println("Data sent successfully!");
+  } else if (status_code == 400) {
+    Serial.println("ERROR: Device not registered or inactive. Please register this device in the web app.");
+    Serial.print("Your Device ID is: ");
+    Serial.println(deviceId);
+  } else {
+    Serial.print("Unexpected response code: ");
+    Serial.println(status_code);
+  }
+  
+  Serial.println("HTTP data sending process complete.");
 
   Watchdog.reset();
 }
 
+// Rest of your code remains the same...
 void pet_draw_age(pet_t *pet)
 {
   // Calculate current age
