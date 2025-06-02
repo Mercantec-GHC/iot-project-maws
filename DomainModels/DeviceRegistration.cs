@@ -14,11 +14,11 @@ namespace DomainModels
         
         [Required]
         [MaxLength(50)]
-        public string DeviceId { get; set; } = string.Empty; // Arduino MAC address or unique ID
+        public string DeviceId { get; set; } = string.Empty; // Arduino MAC address
         
         [Required]
         [MaxLength(100)]
-        public string DeviceName { get; set; } = string.Empty; // User-friendly name
+        public string DeviceName { get; set; } = string.Empty; 
         
         public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
         

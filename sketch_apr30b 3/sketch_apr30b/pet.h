@@ -110,11 +110,12 @@ void pet_send_data_to_server(pet_t* pet) {
   String post_data = "{";
   post_data += "\"hunger\":" + String(pet->hunger) + ",";
   post_data += "\"happiness\":" + String(pet->happiness) + ",";
-  post_data += "\"tiredness\":" + String(pet->tiredness);
+  post_data += "\"tiredness\":" + String(pet->tiredness)+ ",";
+  post_data += "\"lifespan\":"+ String(pet->age)+ ",";
   post_data += "}";
 
   http_client.beginRequest();
-  http_client.post("/insert");
+  http_client.post("/api/pet_data");
   http_client.sendHeader("Content-Type", "application/json");
   http_client.sendHeader("Content-Length", post_data.length());
   http_client.beginBody();

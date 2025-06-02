@@ -62,7 +62,7 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowCredentials();
             
-        // Also allow any origin for Arduino (you might want to restrict this in production)
+        // Also allow any origin for Arduino
         corsBuilder.SetIsOriginAllowed(origin => true)
             .AllowAnyMethod()
             .AllowAnyHeader();
@@ -77,9 +77,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-// DO NOT redirect HTTP to HTTPS for Arduino compatibility
-// Remove or comment out: app.UseHttpsRedirection();
 
 app.UseCors("AllowArduinoAndBlazor");
 

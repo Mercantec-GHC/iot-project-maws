@@ -61,14 +61,13 @@ else
     {
         try
         {
-            // Fetch feedbacks from the API (replace the endpoint with the correct one)
+            // Fetch feedbacks from the API
             feedbacks = await HttpClient.GetFromJsonAsync<List<Feedback>>("api/Feedbacks") ?? new List<Feedback>();
             feedbacks.Reverse();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading feedbacks: {ex.Message}");
-            // Optionally, display an error message to the user
         }
     }
 

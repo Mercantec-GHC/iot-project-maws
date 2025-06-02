@@ -3,9 +3,6 @@ using System.Threading.Tasks;
 using Microsoft.JSInterop;
 using Microsoft.IdentityModel.JsonWebTokens;
 
-
-
-
     public class AppState
     {
         private bool _loggedIn;
@@ -26,7 +23,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
                 }
             }
         }
-
+        
         public int UserId
         {
             get { return _userId; }

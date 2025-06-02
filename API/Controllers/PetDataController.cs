@@ -45,7 +45,7 @@ namespace API.Controllers
             return Ok(latest);
         }
 
-        // POST: api/PetData (for Arduino)
+        // POST: api/PetData
         [HttpPost]
         [AllowAnonymous]
         public async Task<ActionResult> Post([FromBody] ArduinoPetData data)

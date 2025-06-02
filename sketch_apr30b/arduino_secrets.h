@@ -1,5 +1,0 @@
-
-#define SECRET_SSID "NSFW_Wifi"
-#define SECRET_PASS "Keshava108"
-#define SECRET_SERVER "192.168.64.105"
-#define SECRET_PORT 5021

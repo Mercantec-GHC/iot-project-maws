@@ -30,7 +30,7 @@ main {
     position: fixed;
     top: 0;
     width: 100%;
-    z-index: 1000; /* Ensure it stays above other elements */
+    z-index: 1000; 
     padding: 0 1rem;
 }
 

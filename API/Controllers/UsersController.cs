@@ -62,7 +62,7 @@ namespace API.Controllers
 
         // Get all users.
         [HttpGet("all")]
-        // [Authorize(Roles = "Administrator")] // Temporarily comment this out for testing
+        // [Authorize(Roles = "Administrator")] 
         public async Task<ActionResult<IEnumerable<User>>> GetAllProfiles()
         {
             try
@@ -71,7 +71,6 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while fetching users");
             }
         }
@@ -225,9 +224,6 @@ namespace API.Controllers
 			await _DBContext.SaveChangesAsync();
 			return StatusCode(200);
 		}
-
-
-        //
     }
 }
 

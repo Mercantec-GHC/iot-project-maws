@@ -10,6 +10,15 @@ void setup() {
 
   while(!carrier.begin());
   delay(1500); // cant read temp without the delay
+  
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+      Serial.print(".");
+      delay(1000);
+  }
+  //arduino-fwuploader certificates flash -b arduino:samd:mkrwifi1010 -a COM3 -f MyRootCA.pem
+
+  
   carrier.display.setRotation(2);
   carrier.display.fillScreen(0x0000); //clear screen
 
@@ -17,6 +26,7 @@ void setup() {
   center_y = carrier.display.height()/2;
 
 
+  
   pet = pet_init(50, 50, 50);
   smile = animation_create(2,100);
   animation_add_frame(smile,epd_bitmap_image_1);

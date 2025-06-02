@@ -28,7 +28,6 @@ public class Program
         // Configure HttpClient to connect to local API via HTTP
         builder.Services.AddHttpClient("API", client =>
         {
-            // Use HTTP for local development to match Arduino requirements
             client.BaseAddress = new Uri("http://localhost:5021/");
             client.Timeout = TimeSpan.FromSeconds(30);
         });
